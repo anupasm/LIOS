@@ -46,12 +46,19 @@ def main() -> None:
         default=str(Path(__file__).parent / "contact_plan.csv"),
         help="Output CSV path",
     )
+    parser.add_argument(
+        "--propagation-log",
+        default=None,
+        metavar="PATH",
+        help="Write satellite mobility + contact log JSON to this path (for visualization)",
+    )
     args = parser.parse_args()
 
     t_start = parse_dt(args.start)
     t_end = parse_dt(args.end)
     data_dir = Path(args.data)
     out_path = Path(args.out)
+    prop_log_path = Path(args.propagation_log) if args.propagation_log else None
 
     print(f"Loading TLEs from {data_dir}/tles/")
     operators = TLELoader.load_all(data_dir)
@@ -64,7 +71,8 @@ def main() -> None:
     print(f"  Loaded {total_gs} ground stations")
 
     print(f"Computing windows: {t_start.isoformat()} → {t_end.isoformat()}, step={args.step}s")
-    calc = WindowCalculator(t_start, t_end, args.step, args.isl_range)
+    calc = WindowCalculator(t_start, t_end, args.step, args.isl_range,
+                            propagation_log_path=prop_log_path)
     plan = calc.compute(operators, ground_stations)
 
     plan.to_csv(out_path)

@@ -5,3 +5,4 @@ matplotlib>=3.8
 numpy>=1.26
 pytest>=8.0
 python-dateutil>=2.9
+plotly>=6.0

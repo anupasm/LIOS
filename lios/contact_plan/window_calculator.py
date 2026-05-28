@@ -9,6 +9,7 @@ Produces a ContactPlan from the computed windows.
 from __future__ import annotations
 
 import csv
+import json
 import math
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -180,6 +181,108 @@ def _gmst(jd: float, fr: float) -> float:
     return math.radians(theta % 86400 * 360 / 86400)
 
 
+def _eci_to_geodetic(eci_km: np.ndarray, gmst_rad: float) -> Tuple[float, float, float]:
+    """Convert ECI position (km) to geodetic (lat_deg, lon_deg, alt_km).
+
+    Uses Bowring's iterative method; accurate to < 1 mm for LEO altitudes.
+    """
+    x, y, z = float(eci_km[0]), float(eci_km[1]), float(eci_km[2])
+    # ECI → ECEF: rotate by -GMST
+    cg, sg = math.cos(gmst_rad), math.sin(gmst_rad)
+    x_e =  cg * x + sg * y
+    y_e = -sg * x + cg * y
+    z_e = z
+    # ECEF → geodetic
+    RE = 6378.137          # WGS84 equatorial radius km
+    e2 = 0.00669437999014  # first eccentricity squared
+    p = math.sqrt(x_e ** 2 + y_e ** 2)
+    lon_rad = math.atan2(y_e, x_e)
+    lat_rad = math.atan2(z_e, p * (1.0 - e2))
+    for _ in range(10):
+        N = RE / math.sqrt(1.0 - e2 * math.sin(lat_rad) ** 2)
+        lat_new = math.atan2(z_e + e2 * N * math.sin(lat_rad), p)
+        if abs(lat_new - lat_rad) < 1e-12:
+            break
+        lat_rad = lat_new
+    N = RE / math.sqrt(1.0 - e2 * math.sin(lat_rad) ** 2)
+    alt_km = (
+        p / math.cos(lat_rad) - N
+        if abs(math.cos(lat_rad)) > 1e-6
+        else abs(z_e) / abs(math.sin(lat_rad)) - N * (1.0 - e2)
+    )
+    return math.degrees(lat_rad), math.degrees(lon_rad), alt_km
+
+
+def _write_propagation_log(
+    path: Path,
+    cp: "ContactPlan",
+    all_sats: list,
+    all_gs: list,
+    ts_arr: List[float],
+    geo: List[List[Optional[Tuple[float, float, float]]]],
+) -> None:
+    """Write satellite mobility and contact log JSON for visualization."""
+    satellites_out = []
+    for si, sat in enumerate(all_sats):
+        track = []
+        for step_idx, t in enumerate(ts_arr):
+            g = geo[si][step_idx]
+            if g is not None:
+                # [t_sec, lat_deg, lon_deg, alt_km] — compact array format
+                track.append([round(t, 1), round(g[0], 5), round(g[1], 5), round(g[2], 3)])
+        satellites_out.append({
+            "sat_id": sat.sat_id,
+            "operator_id": sat.operator_id,
+            "track": track,
+        })
+
+    ground_stations_out = [
+        {
+            "gs_id": gs.gs_id,
+            "operator_id": gs.operator_id,
+            "lat": gs.lat_deg,
+            "lon": gs.lon_deg,
+            "alt_m": gs.alt_m,
+        }
+        for gs in all_gs
+    ]
+
+    contacts_out = [
+        {
+            "contact_id": c.contact_id,
+            "from_node": c.from_node,
+            "to_node": c.to_node,
+            "start_time_sec": round(c.start_time_sec, 1),
+            "end_time_sec": round(c.end_time_sec, 1),
+            "node_type_from": c.node_type_from,
+            "node_type_to": c.node_type_to,
+            "operator_from": c.operator_from,
+            "operator_to": c.operator_to,
+            "range_km": round(c.range_km, 2),
+            "capacity_kbps": round(c.capacity_kbps, 2),
+        }
+        for c in cp.contacts
+    ]
+
+    t_step = ts_arr[1] - ts_arr[0] if len(ts_arr) > 1 else 0
+    log = {
+        "epoch": cp.epoch.isoformat(),
+        "duration_sec": ts_arr[-1] if ts_arr else 0,
+        "time_step_sec": t_step,
+        "ground_stations": ground_stations_out,
+        "satellites": satellites_out,
+        "contacts": contacts_out,
+    }
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w") as f:
+        json.dump(log, f, separators=(",", ":"))
+    size_kb = path.stat().st_size // 1024
+    n_sats = len(satellites_out)
+    n_track_pts = sum(len(s["track"]) for s in satellites_out)
+    print(f"  Propagation log → {path}  ({size_kb} KB, {n_sats} sats, {n_track_pts} track points, {len(contacts_out)} contacts)")
+
+
 def _elevation_deg(gs_eci: np.ndarray, sat_eci: np.ndarray, gs_lat_rad: float, gs_lon_rad: float, gmst_rad: float) -> float:
     """Compute elevation angle (degrees) of satellite above ground station horizon."""
     rng = sat_eci - gs_eci
@@ -204,11 +307,13 @@ class WindowCalculator:
         t_end: datetime,
         time_step_sec: int = 10,
         isl_max_range_km: float = 2500.0,
+        propagation_log_path: Optional[Path] = None,
     ):
         self.t_start = t_start
         self.t_end = t_end
         self.time_step_sec = time_step_sec
         self.isl_max_range_km = isl_max_range_km
+        self.propagation_log_path = propagation_log_path
 
     def compute(
         self,
@@ -233,14 +338,22 @@ class WindowCalculator:
         # Propagate all satellites at every time step
         n_sats = len(all_sats)
         positions: List[List[Optional[np.ndarray]]] = [[None] * steps for _ in range(n_sats)]
+        _logging = self.propagation_log_path is not None
+        _geo: List[List[Optional[Tuple[float, float, float]]]] = (
+            [[None] * steps for _ in range(n_sats)] if _logging else []
+        )
 
         for step_idx, t_sec in enumerate(ts_arr):
             delta_days = t_sec / 86400.0
             fr_step = epoch_fr + delta_days
             jd_step = epoch_jd + math.floor(fr_step)
             fr_step = fr_step - math.floor(fr_step)
+            gmst = _gmst(jd_step, fr_step) if _logging else 0.0
             for si, sat in enumerate(all_sats):
-                positions[si][step_idx] = _eci_position_km(sat, jd_step, fr_step)
+                pos = _eci_position_km(sat, jd_step, fr_step)
+                positions[si][step_idx] = pos
+                if _logging and pos is not None:
+                    _geo[si][step_idx] = _eci_to_geodetic(pos, gmst)
 
         contact_counter = 0
 
@@ -381,4 +494,10 @@ class WindowCalculator:
                     ))
 
         cp.contacts.sort(key=lambda c: c.start_time_sec)
+
+        if _logging:
+            _write_propagation_log(
+                self.propagation_log_path, cp, all_sats, all_gs, ts_arr, _geo
+            )
+
         return cp

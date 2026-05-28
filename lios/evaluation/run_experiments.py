@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import pprint
 import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -65,7 +66,7 @@ class ExperimentResult:
 
 EXPERIMENT_CONFIGS: List[ExperimentConfig] = [
     # §16.1 Table — all 7 experiment configurations
-    ExperimentConfig("baseline",        duration_sec=5_400,  traffic_load_fraction=0.50, adversarial_mode="none"),
+    ExperimentConfig("baseline",        duration_sec=1200,  traffic_load_fraction=0.50, adversarial_mode="none"),
     ExperimentConfig("depletion",       duration_sec=5_400,  traffic_load_fraction=0.95, adversarial_mode="none",  random_seed=43),
     ExperimentConfig("top_up",          duration_sec=86_400, traffic_load_fraction=0.80, adversarial_mode="none",  random_seed=44),
     ExperimentConfig("adversarial_1",   duration_sec=86_400, traffic_load_fraction=0.70, adversarial_mode="rollback",         random_seed=45),
@@ -77,9 +78,64 @@ EXPERIMENT_CONFIGS: List[ExperimentConfig] = [
 ]
 
 
+# ── Contact traffic attribution ────────────────────────────────────────────────
+
+def _compute_contact_traffic(cp, event_log) -> Dict[str, Dict]:
+    """Return {contact_id: {traffic_kb, flow_count}} using exact path-hop attribution.
+
+    GS contacts: matched when flow.source_ground_node == GS node and
+                 flow.src_satellite == SAT node.
+    ISL contacts: matched when the contact's (from_node, to_node) pair appears
+                  as consecutive nodes in flow.path.hops (bidirectional).
+    """
+    # Build lightweight flow records once
+    flows = []
+    for entry in event_log:
+        if entry.event_type != EventType.TRAFFIC_ARRIVE or not entry.payload:
+            continue
+        fl = entry.payload
+        hops = fl.path.hops if fl.path is not None else []
+        # Pre-compute set of consecutive (a, b) pairs from the routing path
+        hop_pairs: set = set()
+        for i in range(len(hops) - 1):
+            hop_pairs.add((hops[i], hops[i + 1]))
+            hop_pairs.add((hops[i + 1], hops[i]))  # bidirectional ISL
+        flows.append({
+            "t":        entry.time,
+            "src_gs":   fl.source_ground_node,
+            "src_sat":  fl.src_satellite,
+            "kb":       fl.size_kb,
+            "hp":       hop_pairs,
+        })
+
+    result: Dict[str, Dict] = {}
+    for c in cp.contacts:
+        kb, n = 0.0, 0
+        t0, t1 = c.start_time_sec, c.end_time_sec
+        is_gs = (c.node_type_from == "GS")
+        pair  = (c.from_node, c.to_node)
+        for fl in flows:
+            if not (t0 <= fl["t"] <= t1):
+                continue
+            if is_gs:
+                if fl["src_gs"] == c.from_node and fl["src_sat"] == c.to_node:
+                    kb += fl["kb"]
+                    n  += 1
+            else:
+                if pair in fl["hp"]:
+                    kb += fl["kb"]
+                    n  += 1
+        result[c.contact_id] = {"traffic_kb": round(kb, 3), "flow_count": n}
+    return result
+
+
 # ── Runner ─────────────────────────────────────────────────────────────────────
 
-def run_experiment(config: ExperimentConfig, data_dir: Path = DATA_DIR) -> ExperimentResult:
+def run_experiment(
+    config: ExperimentConfig,
+    data_dir: Path = DATA_DIR,
+    out_dir: Optional[Path] = None,
+) -> ExperimentResult:
     import time
     t0 = time.time()
     print(f"\n[EXP] {config.name}: duration={config.duration_sec}s load={config.traffic_load_fraction}")
@@ -90,12 +146,24 @@ def run_experiment(config: ExperimentConfig, data_dir: Path = DATA_DIR) -> Exper
     operator_ids = list(operators_tles.keys())
 
     # 2. Compute contact plan (1 orbit = 90 min for baseline)
-    epoch = datetime(2025, 11, 19, 0, 0, 0, tzinfo=timezone.utc)
+    epoch = datetime(2025, 11, 19, 0, 15, 0, tzinfo=timezone.utc)
     from datetime import timedelta
     t_end = epoch + timedelta(seconds=config.duration_sec)
-    calc = WindowCalculator(epoch, t_end, config.time_step_sec, config.isl_range_km)
+
+    prop_log_path = (
+        out_dir / "logs" / f"{config.name}_propagation_log.json" if out_dir else None
+    )
+    calc = WindowCalculator(
+        epoch, t_end, config.time_step_sec, config.isl_range_km,
+        propagation_log_path=prop_log_path,
+    )
     cp = calc.compute(operators_tles, ground_stations)
     print(f"  Contact plan: {len(cp.contacts)} contacts")
+
+    if out_dir is not None:
+        cp_path = out_dir / "logs" / f"{config.name}_contact_plan.csv"
+        cp.to_csv(cp_path)
+        print(f"  Contact plan → {cp_path}")
 
     # 3. Build operator CAs and satellite nodes
     cas: Dict[str, OperatorCA] = {op: OperatorCA(op) for op in operator_ids}
@@ -155,6 +223,7 @@ def run_experiment(config: ExperimentConfig, data_dir: Path = DATA_DIR) -> Exper
 
     # 7. Pre-schedule traffic flows
     schedule = tgen.generate_poisson_schedule(0.0, config.duration_sec)
+    pprint.pprint(schedule)
     for arr_t, flow in schedule:
         if flow.path and flow.src_satellite:
             loop.schedule(SimEvent(
@@ -185,6 +254,16 @@ def run_experiment(config: ExperimentConfig, data_dir: Path = DATA_DIR) -> Exper
     report["traffic_gen"] = tgen.stats.summary()
     print(f"  Jain fairness: {report['jain_fairness_index']:.4f}")
     print(f"  Flows generated: {tgen.stats.flows_generated}")
+
+    # 10. Per-contact traffic attribution
+    contact_traffic = _compute_contact_traffic(cp, loop.event_log)
+    if out_dir is not None:
+        ct_path = out_dir / "logs" / f"{config.name}_contact_traffic.json"
+        ct_path.parent.mkdir(parents=True, exist_ok=True)
+        with ct_path.open("w") as f:
+            json.dump(contact_traffic, f, separators=(",", ":"))
+        n_active = sum(1 for v in contact_traffic.values() if v["traffic_kb"] > 0)
+        print(f"  Contact traffic → {ct_path}  ({n_active}/{len(contact_traffic)} contacts had traffic)")
 
     wall = time.time() - t0
     return ExperimentResult(config, report, len(cp.contacts), wall)
@@ -358,7 +437,7 @@ def main() -> None:
 
     results: List[ExperimentResult] = []
     for cfg in configs:
-        result = run_experiment(cfg, data_dir)
+        result = run_experiment(cfg, data_dir, out_dir=out_dir)
         results.append(result)
 
         # Save raw metrics
