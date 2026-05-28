@@ -1,0 +1,57 @@
+{
+  "jain_fairness_index": 0.8662765286290611,
+  "free_rider_prevention_rate": 1.0,
+  "settlement_latency": {
+    "mean": 0,
+    "p50": 0,
+    "p95": 0,
+    "p99": 0,
+    "max": 0,
+    "count": 0
+  },
+  "oos_fraction": 0.0,
+  "hash_chain_overhead": {
+    "entries": 52,
+    "bytes_per_entry": 256,
+    "total_bytes": 13312
+  },
+  "penalty_events": 0,
+  "settlement_events": 0,
+  "total_forwarding_events": 52,
+  "bytes_forwarded_by": {
+    "alpha": 24295.240857250643,
+    "beta": 24081.775300934325,
+    "gamma": 33663.24875983939
+  },
+  "bytes_received_by": {
+    "alpha": 15606.256860814608,
+    "beta": 12767.546228793795,
+    "gamma": 53666.46182841596
+  },
+  "simulation_stats": {
+    "events_processed": 196,
+    "isl_opens": 10,
+    "isl_closes": 10,
+    "gs_contacts": 124,
+    "traffic_flows": 52,
+    "settlement_triggers": 0,
+    "wall_clock_elapsed_sec": 0.014008283615112305
+  },
+  "traffic_gen": {
+    "flows_generated": 361,
+    "flows_with_path": 52,
+    "flows_no_path": 309,
+    "path_find_rate": 0.1440443213296399,
+    "mean_hops": 2.4615384615384617,
+    "total_kb_generated": 652141.7138188828,
+    "operator_pair_distribution": {
+      "gamma-gamma": 14,
+      "alpha-gamma": 7,
+      "beta-gamma": 9,
+      "beta-alpha": 8,
+      "alpha-beta": 6,
+      "gamma-beta": 2,
+      "gamma-alpha": 6
+    }
+  }
+}

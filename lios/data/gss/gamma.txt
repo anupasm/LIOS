@@ -1,0 +1,5 @@
+gamma-Tempe,33.42,-111.94
+gamma-Wahiawa,21.50,-158.03
+gamma-Landstuhl,49.41,7.57
+gamma-Beijing,39.91,116.39
+gamma-Auckland,-36.87,174.73

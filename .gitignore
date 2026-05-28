@@ -1,0 +1,22 @@
+.env/*
+.claude/*
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Results and logs
+results/figures/
+results/logs/
+results/*.png
+
+# LaTeX build artifacts
+taes/*.aux
+taes/*.fdb_latexmk
+taes/*.fls
+taes/*.log
+taes/*.out
+taes/*.pdf
+taes/*.synctex.gz
