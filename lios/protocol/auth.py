@@ -91,7 +91,7 @@ class ContactAuthSession:
         self._my_nonce: bytes = os.urandom(NONCE_BYTES)
         self._peer_nonce: Optional[bytes] = None
         self._seen_nonces: Set[bytes] = set()  # replay prevention within session TTL
-        self._ecdh_priv: ec.EllipticCurvePrivateKey = ec.generate_private_key(ec.SECP256R1())
+        self._ecdh_priv: X25519PrivateKey = X25519PrivateKey.generate()
         self._session_key: Optional[bytes] = None
         self._peer_cert: Optional[SatelliteCert] = None
 
@@ -186,7 +186,7 @@ class ContactAuthSession:
 
         # Derive shared session key via ECDH
         peer_ecdh_pub = serialization.load_pem_public_key(peer_hello.ecdh_pub_pem.encode())
-        shared_secret = self._ecdh_priv.exchange(ec.ECDH(), peer_ecdh_pub)
+        shared_secret = self._ecdh_priv.exchange(peer_ecdh_pub)
         # Sort nonces for deterministic salt (same result on both sides)
         nonces = sorted([self._my_nonce, self._peer_nonce])
         self._session_key = HKDF(
