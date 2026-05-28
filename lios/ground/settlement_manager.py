@@ -13,6 +13,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
+from config import cfg
 from contact_plan.gs_loader import GroundStation
 from contact_plan.window_calculator import ContactPlan
 from protocol.isl_state_machine import ISLStateMachine
@@ -22,9 +23,9 @@ from simulator.satellite_node import NotificationBundle, SatelliteNode
 from simulator.simulator import EventType, SimEvent
 
 
-T_CHALLENGE_SEC = 172_800.0     # 48 hours
-T_TOPUP_CONFIRM_SEC = 86_400.0  # 24 hours
-T_LOW_FRACTION = 0.05
+T_CHALLENGE_SEC     = cfg.protocol.t_challenge_sec      # 48 hours
+T_TOPUP_CONFIRM_SEC = cfg.protocol.t_topup_confirm_sec  # 24 hours
+T_LOW_FRACTION      = cfg.protocol.t_low_fraction
 
 
 @dataclass

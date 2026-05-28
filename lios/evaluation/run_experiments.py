@@ -37,6 +37,7 @@ from routing.cgr import CGR
 from simulator.ground_station_node import FabricMock, GroundStationNode
 from simulator.satellite_node import SatelliteNode, create_satellite
 from simulator.simulator import EventLoop, EventType, SimEvent
+from config import cfg as lios_cfg
 from simulator.traffic_generator import TrafficGenerator
 
 
@@ -51,9 +52,9 @@ class ExperimentConfig:
     duration_sec: float
     traffic_load_fraction: float
     adversarial_mode: str    # 'none' | 'rollback' | 'selective_forward'
-    random_seed: int = 42
-    isl_range_km: float = 2500.0
-    time_step_sec: int = 30
+    random_seed: int = lios_cfg.simulation.random_seed
+    isl_range_km: float = lios_cfg.link.isl_max_range_km
+    time_step_sec: int = lios_cfg.simulation.time_step_sec
 
 
 @dataclass

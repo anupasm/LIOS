@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List
 
+from config import cfg
+
 
 @dataclass
 class GroundStation:
@@ -19,7 +21,7 @@ class GroundStation:
     lat_deg: float
     lon_deg: float
     alt_m: float = 0.0
-    min_elevation_deg: float = 5.0
+    min_elevation_deg: float = cfg.link.gs_min_elevation_deg
 
 
 class GSLoader:

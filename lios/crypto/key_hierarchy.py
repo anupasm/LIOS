@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Set
 
+from config import cfg
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric.utils import (
@@ -141,7 +142,7 @@ class OperatorCA:
         self,
         satellite_id: str,
         pub_key: ec.EllipticCurvePublicKey | str,
-        valid_days: int = 90,
+        valid_days: int = cfg.crypto.cert_valid_days,
         permitted_operators: Optional[List[str]] = None,
     ) -> tuple[SatelliteCert, ec.EllipticCurvePrivateKey]:
         """Issue a certificate for satellite_id.
@@ -183,7 +184,7 @@ class OperatorCA:
     def issue_for_new_key(
         self,
         satellite_id: str,
-        valid_days: int = 90,
+        valid_days: int = cfg.crypto.cert_valid_days,
         permitted_operators: Optional[List[str]] = None,
     ) -> tuple[SatelliteCert, ec.EllipticCurvePrivateKey]:
         """Generate a new satellite key pair and issue a cert for it."""

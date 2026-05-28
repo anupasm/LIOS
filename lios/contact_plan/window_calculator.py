@@ -19,15 +19,13 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 from sgp4.api import jday
 
+from config import cfg
 from contact_plan.gs_loader import GroundStation
 from contact_plan.tle_loader import Satellite
 
-# Speed of light (km/s) for propagation delay
-C_KM_S = 299_792.458
-
-# Default link capacities
-C_MAX_ISL_KBPS = 10_000.0
-C_MAX_GS_KBPS = 50_000.0
+C_KM_S         = cfg.link.c_km_s          # speed of light (km/s) for propagation delay
+C_MAX_ISL_KBPS = cfg.link.isl_max_kbps    # default ISL link capacity
+C_MAX_GS_KBPS  = cfg.link.gs_max_kbps     # default GS link capacity
 
 
 @dataclass

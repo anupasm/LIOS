@@ -13,15 +13,16 @@ from typing import List, Literal, Optional, Tuple
 
 from cryptography.hazmat.primitives.asymmetric import ec
 
+from config import cfg
 from crypto.hash_chain import HashChainLog
 from crypto.key_hierarchy import SatelliteCert, _canonical_json, _sign, _verify, _load_pub
 
 
 # ── Settlement triggers (§11.1) ────────────────────────────────────────────────
 
-T_LOW_FRACTION = 0.05       # T_low = 5% of initial capacity
-H_MAX = 10_000              # max hash chain entries before settlement
-S_MAX_KB = 100_000 * 1024  # 100 GB per session
+T_LOW_FRACTION = cfg.protocol.t_low_fraction  # T_low = 5% of initial capacity
+H_MAX          = cfg.protocol.h_max           # max hash chain entries before settlement
+S_MAX_KB       = cfg.protocol.s_max_kb        # 100 GB per session
 
 
 # ── Data models ────────────────────────────────────────────────────────────────
@@ -284,7 +285,6 @@ class OffChainProtocol:
         else:
             proof.sig_b = sig
 
-        # Adopt as latest proof (provisional until cosigned by peer)
         state.latest_proof = proof
         return proof
 

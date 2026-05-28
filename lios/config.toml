@@ -1,0 +1,87 @@
+# LIOS Protocol Configuration
+# All tunable constants in one place.  Edit here; no source changes needed.
+#
+# Loaded by lios/config.py (Python 3.11 tomllib — no extra dependencies).
+# Override path via env var:  LIOS_CONFIG=/path/to/config.toml
+#
+# Section → typed dataclass in config.py:
+#   [protocol]   → ProtocolConfig   (settlement rules, auth, channel sizing)
+#   [link]       → LinkConfig       (RF / laser link physics and thresholds)
+#   [simulation] → SimulationConfig (DES parameters, traffic shape, seeds)
+#   [crypto]     → CryptoConfig     (PKI defaults)
+
+# ── Protocol / settlement rules (§7, §11, §13) ────────────────────────────────
+
+[protocol]
+
+# T1 trigger: balance below this fraction of initial_capacity triggers settlement
+t_low_fraction = 0.05           # 5 %
+
+# T2 trigger: hash chain length ceiling before mandatory settlement
+h_max = 10_000
+
+# T7 trigger: cumulative bytes forwarded in one session (KB).  100 GB = 102_400_000 KB
+s_max_kb = 102_400_000
+
+# On-chain challenge window after initiateSettlement() (seconds).  48 h
+t_challenge_sec = 172_800.0
+
+# Deadline for top-up confirmation by counterpart GS (seconds).  24 h
+t_topup_confirm_sec = 86_400.0
+
+# Initial channel balance per side (KB).  1 TB = 1_048_576 KB
+channel_balance_kb = 1_048_576
+
+# Auth handshake: maximum clock skew between satellites (seconds)
+timestamp_tolerance_sec = 30.0
+
+# Auth handshake: ECDH nonce length (bytes)
+nonce_bytes = 32
+
+# ── Link / physical layer ──────────────────────────────────────────────────────
+
+[link]
+
+# Speed of light (km/s) — used for propagation delay calculation
+c_km_s = 299_792.458
+
+# Peak ISL laser capacity at zero separation (kbps)
+isl_max_kbps = 10_000.0
+
+# Peak GS uplink capacity at minimum elevation (kbps)
+gs_max_kbps = 50_000.0
+
+# Default maximum inter-satellite link range (km)
+isl_max_range_km = 2500.0
+
+# Default minimum ground-station elevation mask (degrees)
+gs_min_elevation_deg = 5.0
+
+# ── Simulation / DES ──────────────────────────────────────────────────────────
+
+[simulation]
+
+# SGP4 orbital propagation time step (seconds)
+time_step_sec = 30
+
+# Poisson traffic arrival rate (flows per second per ground-station node)
+arrival_rate = 0.01
+
+# Traffic generator contact-plan lookahead window (seconds)
+lookahead_sec = 600.0
+
+# Probability that a generated flow is cross-operator (vs same-operator)
+cross_operator_bias = 0.7
+
+# Default PRNG seed for reproducible runs
+random_seed = 42
+
+# Adversarial node: probability of attacking each eligible forwarding event
+p_attack = 0.5
+
+# ── Cryptographic PKI ──────────────────────────────────────────────────────────
+
+[crypto]
+
+# Default satellite certificate validity (days)
+cert_valid_days = 90

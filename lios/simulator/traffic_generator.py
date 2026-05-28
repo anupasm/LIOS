@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 from uuid import uuid4
 
+from config import cfg
 from contact_plan.window_calculator import ContactPlan
 from routing.cgr import CGR, Path
 
@@ -88,10 +89,10 @@ class TrafficGenerator:
         contact_plan: ContactPlan,
         cgr: CGR,
         operator_map: Dict[str, str],
-        arrival_rate: float = 0.01,       # flows per second per ground node
-        lookahead_sec: float = 600.0,
-        cross_operator_bias: float = 0.7,  # probability of picking different operator
-        seed: int = 42,
+        arrival_rate: float = cfg.simulation.arrival_rate,
+        lookahead_sec: float = cfg.simulation.lookahead_sec,
+        cross_operator_bias: float = cfg.simulation.cross_operator_bias,
+        seed: int = cfg.simulation.random_seed,
     ):
         self._cp = contact_plan
         self._cgr = cgr

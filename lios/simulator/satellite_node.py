@@ -20,13 +20,14 @@ from crypto.key_hierarchy import (
     SatelliteKeyStore,
     _sign,
 )
+from config import cfg
 from protocol.auth import ContactAuthSession
 from protocol.isl_state_machine import ISLStateMachine
 from protocol.offchain import BalanceProof, OffChainProtocol, SettlementPayload
 from simulator.simulator import EventType, SimEvent
 
 
-CHANNEL_BALANCE_KB = 1_024 * 1_024  # 1 TB per side (in KB)
+CHANNEL_BALANCE_KB = cfg.protocol.channel_balance_kb  # 1 TB per side (in KB)
 
 
 @dataclass

@@ -27,6 +27,7 @@ from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
+from config import cfg
 from crypto.key_hierarchy import (
     SatelliteCert,
     SatelliteKeyStore,
@@ -36,8 +37,8 @@ from crypto.key_hierarchy import (
 )
 
 
-TIMESTAMP_TOLERANCE_SEC = 30.0
-NONCE_BYTES = 32
+TIMESTAMP_TOLERANCE_SEC = cfg.protocol.timestamp_tolerance_sec
+NONCE_BYTES             = cfg.protocol.nonce_bytes
 
 
 class AuthState(Enum):
