@@ -69,6 +69,10 @@ class CGR:
         self._filter = channel_filter or (lambda a, b: True)
         self._op_map = operator_map or {}
         self._adjacency = self._build_adjacency()
+        # O(1) contact-ID lookup used by Yen's algorithm
+        self._contact_by_id: Dict[str, Contact] = {
+            c.contact_id: c for c in contact_plan.contacts
+        }
 
     def _build_adjacency(self) -> Dict[str, List[Contact]]:
         adj: Dict[str, List[Contact]] = {}
@@ -88,10 +92,15 @@ class CGR:
         dst: str,
         t_start: float,
         k: int = 3,
+        max_hops: int = 5,
     ) -> List[Path]:
-        """Return up to k shortest (min-latency) paths from src to dst starting at t_start."""
-        paths = self._yen_k_shortest(src, dst, t_start, k)
-        # Sort: primarily by latency, break ties by fewest inter-operator hops (fairness)
+        """Return up to k shortest (min-latency) paths from src to dst starting at t_start.
+
+        max_hops limits the number of ISL links traversed (i.e. path nodes − 1).
+        Caps are essential for large constellations where unconstrained Dijkstra
+        can produce unrealistically long chains and inflate settlement event counts.
+        """
+        paths = self._yen_k_shortest(src, dst, t_start, k, max_hops)
         paths.sort(key=lambda p: (p.latency_sec, p.inter_operator_hops))
         return paths
 
@@ -124,11 +133,13 @@ class CGR:
         dst: str,
         t_start: float,
         excluded_edges: Optional[Set[Tuple[str, str, str]]] = None,
+        max_hops: int = 5,
     ) -> Optional[Path]:
         """Modified Dijkstra: minimise arrival time (= earliest-arrival algorithm).
 
         excluded_edges: set of (from_node, to_node, contact_id) triples to skip
                         (used by Yen's algorithm).
+        max_hops:       maximum ISL links to traverse (path nodes − 1).
         """
         excluded = excluded_edges or set()
         # best_arrival[node] = earliest arrival time seen
@@ -147,25 +158,19 @@ class CGR:
             if node == dst:
                 return self._make_path(n_path, c_path, t_start, arr)
 
-            # Enumerate adjacent contacts (ISL and same-operator links)
-            contacts_from: List[Contact] = []
-            for c in self._cp.contacts:
-                if c.node_type_from == "SAT" and c.node_type_to == "SAT":
-                    if c.from_node == node:
-                        contacts_from.append((c, c.to_node))
-                    elif c.to_node == node:
-                        contacts_from.append((c, c.from_node))  # bidirectional
+            if len(n_path) > max_hops:
+                continue  # depth cap reached
 
-            for c, neighbor in contacts_from:
+            for c in self._adjacency.get(node, []):
+                neighbor = c.to_node if c.from_node == node else c.from_node
                 edge = (c.from_node, c.to_node, c.contact_id)
                 if edge in excluded:
                     continue
                 if not self._filter(node, neighbor):
                     continue
-                # Can only depart after arrival at current node AND contact start
                 depart = max(arr, c.start_time_sec)
                 if depart >= c.end_time_sec:
-                    continue  # contact already over
+                    continue
                 prop_delay = _propagation_delay_sec(c.range_km)
                 arrive_neighbor = depart + prop_delay
                 if arrive_neighbor < best.get(neighbor, math.inf):
@@ -198,10 +203,10 @@ class CGR:
     # ── Yen's K-Shortest Paths ─────────────────────────────────────────────────
 
     def _yen_k_shortest(
-        self, src: str, dst: str, t_start: float, k: int
+        self, src: str, dst: str, t_start: float, k: int, max_hops: int = 5
     ) -> List[Path]:
         """Yen's algorithm over the time-expanded contact graph."""
-        first = self._dijkstra(src, dst, t_start)
+        first = self._dijkstra(src, dst, t_start, max_hops=max_hops)
         if first is None:
             return []
         A: List[Path] = [first]
@@ -223,7 +228,7 @@ class CGR:
                             len(prev.contacts) > spur_idx):
                         c_id = prev.contacts[spur_idx]
                         # Find the contact to get from/to nodes
-                        c_obj = next((c for c in self._cp.contacts if c.contact_id == c_id), None)
+                        c_obj = self._contact_by_id.get(c_id)
                         if c_obj:
                             excluded.add((c_obj.from_node, c_obj.to_node, c_id))
                             excluded.add((c_obj.to_node, c_obj.from_node, c_id))
@@ -241,7 +246,7 @@ class CGR:
                             t_acc = max(t_acc, c_obj.start_time_sec) + _propagation_delay_sec(c_obj.range_km)
                     t_spur = t_acc
 
-                spur_path = self._dijkstra(spur_node, dst, t_spur, excluded)
+                spur_path = self._dijkstra(spur_node, dst, t_spur, excluded, max_hops=max_hops)
                 if spur_path is None:
                     continue
 

@@ -115,10 +115,6 @@ def _synthetic_results() -> List[Dict[str, Any]]:
                     "mean": 172500, "p50": 171200, "p95": 172780,
                     "p99": 172799, "max": 172800, "count": settle,
                 },
-                "hash_chain_overhead": {
-                    "entries": fwd_ev * 100, "bytes_per_entry": 256,
-                    "total_bytes": fwd_ev * 100 * 256,
-                },
                 "bytes_forwarded_by": fwd_by,
                 "bytes_received_by": {op: v * 0.97 for op, v in fwd_by.items()},
                 "_synthetic": True,
@@ -274,19 +270,12 @@ def _fig_throughput_fairness(records: List[Dict]) -> go.Figure:
     return fig
 
 
-def _fig_hash_chain_overhead(records: List[Dict]) -> go.Figure:
-    names      = [r["name"] for r in records]
-    overhead_kb = [r["metrics"].get("hash_chain_overhead", {}).get("total_bytes", 0) / 1024
-                   for r in records]
-    entries    = [r["metrics"].get("hash_chain_overhead", {}).get("entries", 0) for r in records]
-    fig = make_subplots(specs=[[{"secondary_y": True}]])
-    fig.add_trace(go.Bar(x=names, y=overhead_kb, name="Storage overhead (KB)",
-                         marker_color="#B279A2", opacity=0.85), secondary_y=False)
-    fig.add_trace(go.Scatter(x=names, y=entries, mode="lines+markers",
-                             name="Hash chain entries",
-                             marker=dict(size=8, color="#4C78A8"),
-                             line=dict(color="#4C78A8", width=2)), secondary_y=True)
-    fig.update_yaxes(title_text="Storage (KB)", secondary_y=False)
+def _fig_forwarding_log_overhead(records: List[Dict]) -> go.Figure:
+    names   = [r["name"] for r in records]
+    entries = [r["metrics"].get("total_forwarding_events", 0) for r in records]
+    fig = go.Figure(go.Bar(x=names, y=entries, name="Forwarding log entries",
+                           marker_color="#B279A2", opacity=0.85))
+    fig.update_yaxes(title_text="Log entries")
     fig.update_yaxes(title_text="Hash chain entries", secondary_y=True)
     fig.update_layout(title="LIOS Protocol — Hash Chain Storage Overhead",
                       height=400, margin=dict(t=80, b=60, l=70, r=70),
@@ -757,7 +746,7 @@ def build_dashboard(
         "settlement":  _div(_fig_settlement(records)),
         "adversarial": _div(_fig_adversarial(records)),
         "throughput":  _div(_fig_throughput_fairness(records)),
-        "overhead":    _div(_fig_hash_chain_overhead(records)),
+        "overhead":    _div(_fig_forwarding_log_overhead(records)),
         "globe": (
             _div(_fig_satellite_globe(prop_log)) if has_mobility
             else _no_data_div(

@@ -50,6 +50,30 @@ class OOSRecord:
     duration_sec: float
 
 
+# ── Security-specific records ──────────────────────────────────────────────────
+
+@dataclass
+class RollbackRecord:
+    """One rollback attempt by a malicious satellite."""
+    channel_id: str
+    attack_seq: int        # stale seq_num submitted
+    honest_seq: int        # true latest seq_num
+    gain_kb: float         # KB the attacker would gain if unchallenged
+    t_attack: float        # sim time of submission
+    detected: bool = False
+    t_detected: float = 0.0
+    detection_latency_sec: float = 0.0
+
+
+@dataclass
+class SelectiveDropRecord:
+    """One selective-forward drop event."""
+    channel_id: str
+    bytes_kb: float
+    sim_time: float
+    # False-claim: traffic counted in balance but not actually forwarded.
+
+
 # ── MetricsCollector ───────────────────────────────────────────────────────────
 
 class MetricsCollector:
@@ -59,12 +83,16 @@ class MetricsCollector:
         self.operators = operators
         self.bytes_forwarded_by: Dict[str, float] = {op: 0.0 for op in operators}
         self.bytes_received_by: Dict[str, float] = {op: 0.0 for op in operators}
+        self.payments_received_by: Dict[str, float] = {op: 0.0 for op in operators}
         self.settlement_events: List[SettlementRecord] = []
         self.penalty_events: List[PenaltyRecord] = []
         self.oos_records: List[OOSRecord] = []
         self.forwarding_timeline: List[ForwardingRecord] = []
         self.rollback_attempts: int = 0
-        self._balance_snapshots: Dict[str, List[Tuple[float, float, float]]] = {}  # op_pair → [(t, balA, balB)]
+        self._balance_snapshots: Dict[str, List[Tuple[float, float, float]]] = {}
+        # Security records
+        self.rollback_records: List[RollbackRecord] = []
+        self.selective_drop_records: List[SelectiveDropRecord] = []
 
     # ── record methods ─────────────────────────────────────────────────────────
 
@@ -98,6 +126,38 @@ class MetricsCollector:
     def record_rollback_attempt(self) -> None:
         self.rollback_attempts += 1
 
+    def record_rollback(
+        self,
+        channel_id: str,
+        attack_seq: int,
+        honest_seq: int,
+        gain_kb: float,
+        t_attack: float,
+        detected: bool = False,
+        t_detected: float = 0.0,
+    ) -> None:
+        detection_latency = (t_detected - t_attack) if detected else 0.0
+        self.rollback_records.append(RollbackRecord(
+            channel_id=channel_id,
+            attack_seq=attack_seq,
+            honest_seq=honest_seq,
+            gain_kb=gain_kb,
+            t_attack=t_attack,
+            detected=detected,
+            t_detected=t_detected,
+            detection_latency_sec=detection_latency,
+        ))
+        self.rollback_attempts += 1
+
+    def record_selective_drop(self, channel_id: str, bytes_kb: float, sim_time: float) -> None:
+        self.selective_drop_records.append(SelectiveDropRecord(channel_id, bytes_kb, sim_time))
+
+    def record_payment(self, from_op: str, to_op: str, amount_kb: float) -> None:
+        """Record a monetary transfer (in KB-equivalent) from one operator to another."""
+        if amount_kb <= 0:
+            return
+        self.payments_received_by[to_op] = self.payments_received_by.get(to_op, 0.0) + amount_kb
+
     def record_balance_snapshot(
         self, op_pair: str, t: float, bal_a: float, bal_b: float
     ) -> None:
@@ -119,6 +179,24 @@ class MetricsCollector:
             return 1.0
         n = len(ratios)
         return (sum(ratios) ** 2) / (n * sum(r ** 2 for r in ratios))
+
+    def compute_utility_jain(self, price_per_kb: float = 1.0) -> float:
+        """Jain index on gross utility = traffic_received * price + payments_received.
+
+        Allows fair comparison across protocols: for Central/T4T/Greedy payments are
+        zero, so utility reduces to traffic received.  For LIOS, on-chain compensation
+        is included, showing fairness even when raw traffic is unbalanced.
+        """
+        utilities = [
+            self.bytes_received_by.get(op, 0.0) * price_per_kb
+            + self.payments_received_by.get(op, 0.0)
+            for op in self.operators
+        ]
+        total = sum(utilities)
+        if total == 0:
+            return 1.0
+        n = len(utilities)
+        return (total ** 2) / (n * sum(u ** 2 for u in utilities))
 
     def compute_free_rider_prevention_rate(self) -> float:
         """Fraction of rollback attempts that resulted in a penalty."""
@@ -147,28 +225,91 @@ class MetricsCollector:
         total_oos = sum(r.duration_sec for r in self.oos_records)
         return min(1.0, total_oos / total_contact_sec)
 
-    def compute_hash_chain_storage_overhead_bytes(self) -> dict:
-        """Estimate storage overhead per forwarding event (from forwarding timeline)."""
-        entry_size_bytes = 256  # conservative estimate from spec
-        total_entries = len(self.forwarding_timeline)
+    # ── security metrics ───────────────────────────────────────────────────────
+
+    def compute_detection_rate(self) -> float:
+        """Fraction of rollback attempts that were detected and penalised."""
+        if not self.rollback_records:
+            return 1.0  # No attacks → vacuously 100 %
+        return sum(1 for r in self.rollback_records if r.detected) / len(self.rollback_records)
+
+    def compute_detection_latency_stats(self) -> dict:
+        latencies = [r.detection_latency_sec for r in self.rollback_records if r.detected]
+        if not latencies:
+            return {"mean": 0, "p50": 0, "p95": 0, "max": 0, "count": 0}
+        arr = np.array(latencies)
         return {
-            "entries": total_entries,
-            "bytes_per_entry": entry_size_bytes,
-            "total_bytes": total_entries * entry_size_bytes,
+            "mean": float(np.mean(arr)),
+            "p50":  float(np.percentile(arr, 50)),
+            "p95":  float(np.percentile(arr, 95)),
+            "max":  float(np.max(arr)),
+            "count": len(latencies),
         }
+
+    def compute_economic_deterrence(self) -> dict:
+        """KB gain prevented across all detected rollback attempts."""
+        detected = [r for r in self.rollback_records if r.detected]
+        attempted_gain = sum(r.gain_kb for r in self.rollback_records)
+        prevented_gain = sum(r.gain_kb for r in detected)
+        return {
+            "total_attempted_gain_kb": attempted_gain,
+            "total_prevented_gain_kb": prevented_gain,
+            "prevention_fraction": prevented_gain / attempted_gain if attempted_gain > 0 else 1.0,
+        }
+
+    def compute_false_claim_rate(self) -> dict:
+        """Fraction of total forwarding events that were selective-forward drops (false claims)."""
+        total_fwd = len(self.forwarding_timeline)
+        drops = len(self.selective_drop_records)
+        claimed_kb = sum(r.bytes_kb for r in self.selective_drop_records)
+        return {
+            "drop_count": drops,
+            "total_fwd_events": total_fwd,
+            "false_claim_fraction": drops / (total_fwd + drops) if (total_fwd + drops) > 0 else 0.0,
+            "falsely_claimed_kb": claimed_kb,
+        }
+
+    def compute_tch_sensitivity(self, tch_values_sec: List[float]) -> List[dict]:
+        """Post-hoc E3 analysis: for each Tch value, what fraction of detected attacks
+        would still be caught (detection_latency ≤ Tch)?"""
+        if not self.rollback_records:
+            return [{"tch_sec": tch, "detection_rate": 1.0} for tch in tch_values_sec]
+        total = len(self.rollback_records)
+        results = []
+        for tch in tch_values_sec:
+            caught = sum(
+                1 for r in self.rollback_records
+                if r.detected and r.detection_latency_sec <= tch
+            )
+            results.append({
+                "tch_sec": tch,
+                "tch_hours": tch / 3600,
+                "detection_rate": caught / total,
+                "caught": caught,
+                "total": total,
+            })
+        return results
 
     def generate_report(self, total_contact_sec: float = 0.0) -> dict:
         return {
             "jain_fairness_index": self.compute_jain_fairness_index(),
+            "utility_jain": self.compute_utility_jain(),
+            "payments_received_by": dict(self.payments_received_by),
             "free_rider_prevention_rate": self.compute_free_rider_prevention_rate(),
             "settlement_latency": self.compute_settlement_latency_stats(),
             "oos_fraction": self.compute_oos_fraction(total_contact_sec),
-            "hash_chain_overhead": self.compute_hash_chain_storage_overhead_bytes(),
             "penalty_events": len(self.penalty_events),
             "settlement_events": len(self.settlement_events),
             "total_forwarding_events": len(self.forwarding_timeline),
             "bytes_forwarded_by": self.bytes_forwarded_by,
             "bytes_received_by": self.bytes_received_by,
+            # Security-specific fields (non-zero only in adversarial runs)
+            "detection_rate": self.compute_detection_rate(),
+            "detection_latency": self.compute_detection_latency_stats(),
+            "economic_deterrence": self.compute_economic_deterrence(),
+            "false_claim": self.compute_false_claim_rate(),
+            "rollback_attempts": len(self.rollback_records),
+            "selective_drops": len(self.selective_drop_records),
         }
 
     # ── plotting ───────────────────────────────────────────────────────────────

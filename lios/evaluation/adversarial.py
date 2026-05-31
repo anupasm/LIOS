@@ -1,9 +1,12 @@
-"""Adversarial satellite node for LIOS protocol testing (§16 Adversarial-1 & 2).
+"""Adversarial nodes for LIOS protocol security experiments (E1–E3).
 
-MaliciousSatelliteNode subclasses SatelliteNode and overrides settlement
-behaviour to simulate:
-  - 'rollback': publishes an old BalanceProof with a higher self-balance.
-  - 'selective_forward': drops traffic but claims credit in the hash chain.
+MaliciousSatelliteNode — overrides settlement to simulate:
+  - 'rollback':          publishes an old BalanceProof with a higher self-balance (E1).
+  - 'selective_forward': drops traffic but records credit in the hash chain (E2).
+
+MaliciousGroundStationNode — overrides settlement submission to simulate E3
+  (settlement racing): submits a stale proof before the peer GS has had a
+  ground contact, testing whether Tch is large enough to allow a challenge.
 """
 from __future__ import annotations
 
@@ -63,14 +66,20 @@ class MaliciousSatelliteNode(SatelliteNode):
                     tampered = SettlementPayload(
                         channel_id=payload.channel_id,
                         latest_proof=old_proof,
-                        hash_chain_bytes=payload.hash_chain_bytes,
+                        log_bytes=payload.log_bytes,
                         triggers_fired=payload.triggers_fired,
                     )
                     self.attack_log.append(AttackRecord(
                         attack_type="rollback",
                         channel_id=payload.channel_id,
-                        sim_time=0.0,
-                        details={"fake_seq": old_proof.seq_num, "real_seq": payload.latest_proof.seq_num},
+                        sim_time=payload.queued_at,  # use the settlement-trigger timestamp
+                        details={
+                            "fake_seq": old_proof.seq_num,
+                            "real_seq": payload.latest_proof.seq_num,
+                            "gain_kb": (old_proof.balance_a_kb - payload.latest_proof.balance_a_kb)
+                                       if self._is_role_a(payload.channel_id)
+                                       else (old_proof.balance_b_kb - payload.latest_proof.balance_b_kb),
+                        },
                     ))
                     result.append(tampered)
                     continue
@@ -97,23 +106,36 @@ class MaliciousSatelliteNode(SatelliteNode):
         return len(parts) > 0 and parts[0] == self.satellite_id
 
     def _on_traffic_arrive(self, event: SimEvent) -> List[SimEvent]:
-        """Selective forwarding: run full protocol (hash chain credit) but drop routing.
+        """Selective forwarding: record credit in the hash chain but suppress delivery.
 
-        The honest counterpart will notice the missing forwarding ACK but the
-        attacker's BalanceProof will already reflect the false credit, triggering
-        the challenge mechanism on settlement.
+        The honest counterpart's GS will detect the discrepancy at settlement time
+        when the claimed forwarding bytes exceed the bytes it independently verified
+        via ACK receipts.
         """
         if self.attack_mode == "selective_forward" and self._rng.random() < self.p_drop:
-            peer_id = event.from_node if event.to_node == self.satellite_id else event.to_node
-            channel_id = self._channel_id(peer_id)
-            # Run the full protocol record (updates balance proof + hash chain) …
+            flow = event.payload
+            bytes_kb = getattr(flow, "size_kb", 0.0) if flow else 0.0
+            # Determine the channel for this hop.
+            hops = flow.path.hops if (flow and flow.path) else []
+            peer_id = None
+            try:
+                my_idx = hops.index(self.satellite_id)
+                if my_idx + 1 < len(hops):
+                    peer_id = hops[my_idx + 1]
+            except ValueError:
+                pass
+            channel_id = self._channel_id(peer_id) if peer_id else "unknown"
+            # Execute the full balance-proof update (attacker claims credit) …
             super()._on_traffic_arrive(event)
-            # … but discard the routing events so traffic is never forwarded.
+            # … but do NOT deliver the traffic payload onward (drop).
             self.attack_log.append(AttackRecord(
                 attack_type="selective_forward_drop",
                 channel_id=channel_id,
                 sim_time=event.time,
-                details={"flow_id": getattr(event.payload, "flow_id", "unknown")},
+                details={
+                    "flow_id": getattr(flow, "flow_id", "unknown") if flow else "unknown",
+                    "bytes_kb": bytes_kb,
+                },
             ))
             return []
         return super()._on_traffic_arrive(event)
@@ -136,7 +158,89 @@ class MaliciousSatelliteNode(SatelliteNode):
             "total_attacks": len(self.attack_log),
             "rollbacks": sum(1 for a in self.attack_log if a.attack_type == "rollback"),
             "selective_drops": sum(1 for a in self.attack_log if a.attack_type == "selective_forward_drop"),
+            "total_gain_kb": sum(
+                a.details.get("gain_kb", 0.0)
+                for a in self.attack_log
+                if a.attack_type == "rollback"
+            ),
         }
+
+
+# ── MaliciousGroundStationNode (E3 — settlement racing) ───────────────────────────
+
+class MaliciousGroundStationNode:
+    """GS node that submits a stale proof to race the honest peer's challenge.
+
+    Used in E3 (settlement racing) to test whether Tch ≥ δ_GC holds empirically.
+    The node keeps a history of proofs received from its satellite and, with
+    probability ``p_stale``, submits a proof from ``stale_by`` contacts ago
+    instead of the latest one.  This simulates an attacker who submits immediately
+    after ISL contact-end, before the honest peer GS has had a ground contact.
+
+    ``gs_contact_delay_sec`` adds artificial latency to the honest peer's upload
+    to model constellations with sparse ground-station coverage (high δ_GC).
+    """
+
+    def __init__(
+        self,
+        gs_node,                           # GroundStationNode instance to wrap
+        p_stale: float = 1.0,
+        stale_by: int = 2,
+        gs_contact_delay_sec: float = 0.0,
+        attack_seed: int = 77,
+    ) -> None:
+        self._gs = gs_node
+        self.p_stale = p_stale
+        self.stale_by = stale_by
+        self.gs_contact_delay_sec = gs_contact_delay_sec
+        self._rng = random.Random(attack_seed)
+        # ch_id → list of (t, BalanceProof) tuples in order received
+        self._proof_history: Dict[str, list] = {}
+        self.racing_log: List[dict] = []
+
+    # Delegate attribute access to the wrapped GS node
+    def __getattr__(self, name):
+        return getattr(self._gs, name)
+
+    def receive_settlement_payload(self, sat_id, payload, t):
+        """Intercept payload: with probability p_stale, submit a stale proof."""
+        from protocol.offchain import SettlementPayload as _SP
+
+        ch_id = payload.channel_id
+        current_proof = payload.latest_proof
+
+        # Record the honest proof in history
+        history = self._proof_history.setdefault(ch_id, [])
+        history.append((t, current_proof))
+
+        if (
+            not payload.reset_requested
+            and self._rng.random() < self.p_stale
+            and len(history) > self.stale_by
+        ):
+            stale_proof = history[-(self.stale_by + 1)][1]
+            stale_payload = _SP(
+                channel_id=ch_id,
+                latest_proof=stale_proof,
+                log_bytes=payload.log_bytes,
+                triggers_fired=payload.triggers_fired,
+                contact_id=payload.contact_id,
+                queued_at=payload.queued_at,
+                reset_requested=False,
+            )
+            self.racing_log.append({
+                "channel_id": ch_id,
+                "stale_seq": stale_proof.seq_num,
+                "honest_seq": current_proof.seq_num,
+                "t_submit": t,
+                "gs_contact_delay_sec": self.gs_contact_delay_sec,
+            })
+            return self._gs.receive_settlement_payload(sat_id, stale_payload, t)
+
+        return self._gs.receive_settlement_payload(sat_id, payload, t)
+
+    def handle_event(self, event):
+        return self._gs.handle_event(event)
 
 
 # ── run_adversarial_scenario ─────────────────────────────────────────────────────

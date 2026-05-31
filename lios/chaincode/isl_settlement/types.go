@@ -1,80 +1,80 @@
 package main
 
-// ── Operator-Level Channel ───────────────────────────────────────────────────
+// ── Operator-Level Channel ────────────────────────────────────────────────────
 
 type OperatorChannel struct {
-	ID               string  `json:"channelId"`
-	OperatorA        string  `json:"operatorA"`
-	OperatorB        string  `json:"operatorB"`
-	BalanceA         float64 `json:"balanceA"`
-	BalanceB         float64 `json:"balanceB"`
-	PenaltyReserveA  float64 `json:"penaltyReserveA"`
-	PenaltyReserveB  float64 `json:"penaltyReserveB"`
-	Status           string  `json:"status"` // OPEN|SETTLING|DISPUTED|CLOSED
-	OpenedAt         int64   `json:"openedAt"`
-	ClosedAt         *int64  `json:"closedAt,omitempty"`
+	ID              string  `json:"channelId"`
+	OperatorA       string  `json:"operatorA"`
+	OperatorB       string  `json:"operatorB"`
+	BalanceA        float64 `json:"balanceA"`
+	BalanceB        float64 `json:"balanceB"`
+	PenaltyReserveA float64 `json:"penaltyReserveA"`
+	PenaltyReserveB float64 `json:"penaltyReserveB"`
+	Status          string  `json:"status"` // OPEN|SETTLING|DISPUTED|CLOSED
+	OpenedAt        int64   `json:"openedAt"`
+	ClosedAt        int64   `json:"closedAt,omitempty"`
 }
 
-// ── Satellite-Pair Sub-Channel ───────────────────────────────────────────────
+// ── Settlement Record ─────────────────────────────────────────────────────────
+//
+// Replaces the heavyweight SatChannel.  Created lazily on the first settlement
+// or ISL pause for a satellite pair — no upfront registration or fund-locking
+// required.  Serves as the replay-prevention cursor (LatestSeqNum) and the
+// on-chain anchor for the OOS log.  Satellite-pair public keys are looked up
+// from the SatKey registry; operator-channel liquidity is managed independently.
 
-type SatChannel struct {
-	ID                string             `json:"satChannelId"`
-	OperatorChannelID string             `json:"operatorChannelId"`
-	SatA              string             `json:"satelliteA"`
-	SatB              string             `json:"satelliteB"`
-	SeqNum            int64              `json:"currentSeqNum"`
-	BalanceA          float64            `json:"balanceA"`
-	BalanceB          float64            `json:"balanceB"`
-	HashHeadA         string             `json:"hashChainHeadA"`
-	HashHeadB         string             `json:"hashChainHeadB"`
-	LastUpdated       int64              `json:"lastUpdated"`
-	Status            string             `json:"status"` // ACTIVE|PAUSED|PENDING_SETTLEMENT|SETTLED
+type SettlementRecord struct {
+	SatPairID         string              `json:"satPairId"`
+	SatA              string              `json:"satelliteA"`
+	SatB              string              `json:"satelliteB"`
+	OperatorChannelID string              `json:"operatorChannelId"`
+	LatestSeqNum      int64               `json:"latestSeqNum"`
+	LastUpdated       int64               `json:"lastUpdated"`
 	OutOfServiceLog   []OutOfServiceEntry `json:"outOfServiceLog"`
-	SettlementSubmittedAt *int64         `json:"settlementSubmittedAt,omitempty"`
-	SubmittedProof    *BalanceProof      `json:"submittedProof,omitempty"`
 }
 
-// ── Balance Proof ────────────────────────────────────────────────────────────
+// ── Dispute Record ────────────────────────────────────────────────────────────
+//
+// Ephemeral object created by InitiateSettlement; deleted when the dispute is
+// resolved (ChallengeSettlement with a co-signed counter-proof, or
+// FinalizeSettlement after T_challenge expires).
+
+type DisputeRecord struct {
+	SatPairID         string        `json:"satPairId"`
+	SatA              string        `json:"satelliteA"`
+	SatB              string        `json:"satelliteB"`
+	OperatorChannelID string        `json:"operatorChannelId"`
+	SubmittedProof    *BalanceProof `json:"submittedProof"`
+	SubmittedAt       int64         `json:"submittedAt"`
+}
+
+// ── Balance Proof ─────────────────────────────────────────────────────────────
+// JSON tags match the keys used by blockchain_client._proof_to_chaincode_json().
 
 type BalanceProof struct {
 	ChannelID   string  `json:"satChannelId"`
 	SeqNum      int64   `json:"seqNum"`
 	BalanceA    float64 `json:"balanceA"`
 	BalanceB    float64 `json:"balanceB"`
-	HashHeadA   string  `json:"hashChainHeadA"`
-	HashHeadB   string  `json:"hashChainHeadB"`
 	SigA        string  `json:"sigA"`        // DER hex ECDSA P-256
 	SigB        string  `json:"sigB"`
 	SubmittedBy string  `json:"submittedBy"` // operator MSP ID
 	SubmittedAt int64   `json:"submittedAt"`
 }
 
-// ── Dispute Record ───────────────────────────────────────────────────────────
-
-type DisputeRecord struct {
-	ID           string        `json:"disputeId"`
-	ChannelID    string        `json:"satChannelId"`
-	ClaimedProof BalanceProof  `json:"claimedProof"`
-	CounterProof *BalanceProof `json:"counterProof,omitempty"`
-	Status       string        `json:"status"` // OPEN|RESOLVED_PENALTY|RESOLVED_VALID
-	OpenedAt     int64         `json:"openedAt"`
-	ResolvedAt   *int64        `json:"resolvedAt,omitempty"`
-	PenaltyPaid  bool          `json:"penaltyPaid"`
-}
-
-// ── Out-of-Service Log Entry ─────────────────────────────────────────────────
+// ── Out-of-Service Log Entry ──────────────────────────────────────────────────
 
 type OutOfServiceEntry struct {
-	ChannelID   string `json:"satChannelId"`
+	ChannelID   string `json:"satPairId"`
 	PausedAt    int64  `json:"pausedAt"`
-	ResumedAt   *int64 `json:"resumedAt,omitempty"`
-	SatAAckAt   *int64 `json:"satA_ackAt,omitempty"`
-	SatBAckAt   *int64 `json:"satB_ackAt,omitempty"`
+	ResumedAt   int64  `json:"resumedAt,omitempty"`
+	SatAAckAt   int64  `json:"satA_ackAt,omitempty"`
+	SatBAckAt   int64  `json:"satB_ackAt,omitempty"`
 	Reason      string `json:"reason"`      // SETTLEMENT|BALANCE_DEPLETED|OPERATOR_REQUEST
 	InitiatedBy string `json:"initiatedBy"` // operator MSP ID
 }
 
-// ── Top-Up Request ───────────────────────────────────────────────────────────
+// ── Top-Up Request ────────────────────────────────────────────────────────────
 
 type TopUpRequest struct {
 	ID                string  `json:"topUpId"`
@@ -88,20 +88,20 @@ type TopUpRequest struct {
 	ExpiresAt         int64   `json:"expiresAt"`
 }
 
-// ── Settlement Notification ──────────────────────────────────────────────────
+// ── Settlement Notification ───────────────────────────────────────────────────
 
 type SettlementNotification struct {
 	ID              string `json:"notifId"`
 	TargetOperator  string `json:"targetOperator"`
 	TargetSatellite string `json:"targetSatellite,omitempty"`
-	Type            string `json:"type"`    // SETTLEMENT_STARTED|SETTLEMENT_COMPLETE|...
+	Type            string `json:"type"`
 	Payload         string `json:"payload"` // JSON string
 	CreatedAt       int64  `json:"createdAt"`
 	Acknowledged    bool   `json:"acknowledged"`
-	AcknowledgedAt  *int64 `json:"acknowledgedAt,omitempty"`
+	AcknowledgedAt  int64  `json:"acknowledgedAt,omitempty"`
 }
 
-// ── Satellite Key Record ─────────────────────────────────────────────────────
+// ── Satellite Key Record ──────────────────────────────────────────────────────
 
 type SatKey struct {
 	SatelliteID  string `json:"satelliteId"`
@@ -109,29 +109,46 @@ type SatKey struct {
 	PubKeyPEM    string `json:"pubKeyPEM"`
 	IsRevoked    bool   `json:"isRevoked"`
 	RegisteredAt int64  `json:"registeredAt"`
-	RevokedAt    *int64 `json:"revokedAt,omitempty"`
+	RevokedAt    int64  `json:"revokedAt"` // always serialised; 0 means not revoked
 }
 
 // ── Chaincode event names ─────────────────────────────────────────────────────
 
 const (
-	EventChannelOpened         = "ChannelOpened"
-	EventSettlementInitiated   = "SettlementInitiated"
-	EventSettlementChallenged  = "SettlementChallenged"
-	EventSettlementFinalized   = "SettlementFinalized"
-	EventDisputeOpened         = "DisputeOpened"
-	EventDisputeResolved       = "DisputeResolved"
-	EventPenaltyApplied        = "PenaltyApplied"
-	EventTopUpRequested        = "TopUpRequested"
-	EventTopUpConfirmed        = "TopUpConfirmed"
-	EventTopUpExpired          = "TopUpExpired"
-	EventISLPaused             = "ISLPaused"
-	EventISLResumed            = "ISLResumed"
-	EventKeyRegistered         = "KeyRegistered"
-	EventKeyRevoked            = "KeyRevoked"
+	EventChannelOpened        = "ChannelOpened"
+	EventSettlementInitiated  = "SettlementInitiated"
+	EventSettlementChallenged = "SettlementChallenged"
+	EventSettlementFinalized  = "SettlementFinalized"
+	EventDisputeResolved      = "DisputeResolved"
+	EventPenaltyApplied       = "PenaltyApplied"
+	EventTopUpRequested       = "TopUpRequested"
+	EventTopUpConfirmed       = "TopUpConfirmed"
+	EventTopUpExpired         = "TopUpExpired"
+	EventISLPaused            = "ISLPaused"
+	EventISLResumed           = "ISLResumed"
+	EventBalanceReset         = "BalanceReset"
+	EventKeyRegistered        = "KeyRegistered"
+	EventKeyRevoked           = "KeyRevoked"
 )
 
-// ── Constants ─────────────────────────────────────────────────────────────────
+// ── Bulk Initialization Inputs ────────────────────────────────────────────────
+
+type OperatorChannelInit struct {
+	OperatorA string  `json:"operatorA"`
+	OperatorB string  `json:"operatorB"`
+	BalanceA  float64 `json:"balanceA"`
+	BalanceB  float64 `json:"balanceB"`
+	ReserveA  float64 `json:"reserveA"`
+	ReserveB  float64 `json:"reserveB"`
+}
+
+type SatKeyInit struct {
+	OperatorID  string `json:"operatorId"`
+	SatelliteID string `json:"satelliteId"`
+	PubKeyPEM   string `json:"pubKeyPEM"`
+}
+
+// ── Protocol constants ────────────────────────────────────────────────────────
 
 const (
 	TChallengeWindowSec int64 = 172800 // 48 hours

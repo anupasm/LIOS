@@ -46,18 +46,27 @@ class GSLoader:
     @classmethod
     def _parse_file(cls, path: Path, operator: str) -> List[GroundStation]:
         stations: List[GroundStation] = []
-        for raw_line in path.read_text().splitlines():
+        for lineno, raw_line in enumerate(path.read_text().splitlines(), 1):
             line = raw_line.strip()
             if not line or line.startswith("#"):
                 continue
             parts = line.split(",")
-            if len(parts) < 3:
-                raise ValueError(f"Malformed GS line in {path}: {raw_line!r}")
-            gs_id = parts[0].strip().lower().replace(" ", "_")
-            lat = float(parts[1])
-            lon = float(parts[2])
-            alt = float(parts[3]) if len(parts) > 3 else 0.0
-            min_el = float(parts[4]) if len(parts) > 4 else 5.0
+            try:
+                if len(parts) < 3:
+                    raise ValueError("too few fields")
+                gs_id = parts[0].strip().lower().replace(" ", "_")
+                lat = float(parts[1])
+                lon = float(parts[2])
+                if not parts[1].strip() or not parts[2].strip():
+                    raise ValueError("blank lat/lon field")
+                alt = float(parts[3]) if len(parts) > 3 and parts[3].strip() else 0.0
+                min_el = float(parts[4]) if len(parts) > 4 and parts[4].strip() else 5.0
+            except ValueError as exc:
+                import warnings
+                warnings.warn(
+                    f"{path.name}:{lineno}: skipping malformed line ({exc}): {raw_line!r}"
+                )
+                continue
             stations.append(
                 GroundStation(
                     gs_id=gs_id,

@@ -1,8 +1,12 @@
 """LIOS configuration loader.
 
-Reads ``lios/config.toml`` using the Python 3.11 built-in ``tomllib``.
-Falls back silently to hardcoded defaults when no file is found, so the
-codebase works out-of-the-box without a config file present.
+Single source of truth: ``lios/config.toml``.
+Parsed with the Python 3.11 built-in ``tomllib``; no extra dependencies.
+
+The Python dataclasses below are pure type containers — they carry **no**
+hardcoded defaults.  Every value must be present in the TOML file.
+A missing file raises ``FileNotFoundError`` immediately so misconfiguration
+is never silently swallowed.
 
 Override the config file location::
 
@@ -12,7 +16,6 @@ Usage::
 
     from config import cfg
 
-    cfg.protocol.h_max              # 10_000
     cfg.link.isl_max_kbps           # 10_000.0
     cfg.simulation.arrival_rate     # 0.01
     cfg.crypto.cert_valid_days      # 90
@@ -21,46 +24,42 @@ from __future__ import annotations
 
 import os
 import tomllib
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 
-# ── Typed config sections ──────────────────────────────────────────────────────
+# ── Typed config sections (no defaults — values come exclusively from TOML) ────
 
 @dataclass
 class ProtocolConfig:
     """Settlement rules, auth parameters, and channel sizing (§7, §11, §13)."""
 
-    t_low_fraction: float = 0.05
+    t_low_fraction: float
     """T1 trigger threshold: settlement fires when either side's balance falls
     below this fraction of the initial channel capacity (default 5 %)."""
 
-    h_max: int = 10_000
-    """T2 trigger threshold: maximum hash-chain entries per session before a
-    mandatory settlement is initiated (prevents unbounded chain growth)."""
-
-    s_max_kb: int = 100_000 * 1024
+    s_max_kb: int
     """T7 trigger threshold: cumulative bytes forwarded in one session (KB).
     Default is 100 GB (102 400 000 KB); settlement resets the counter."""
 
-    t_challenge_sec: float = 172_800.0
+    t_challenge_sec: float
     """On-chain challenge window after initiateSettlement() (seconds).
     Default 48 h — the honest peer must submit a counter-proof within this
     window or the initiator's proof is finalised unchallenged."""
 
-    t_topup_confirm_sec: float = 86_400.0
+    t_topup_confirm_sec: float
     """Deadline for the counterpart ground station to confirm a top-up
     request (seconds). Default 24 h; expired requests are discarded."""
 
-    channel_balance_kb: int = 1_024 * 1_024
+    channel_balance_kb: int
     """Initial channel balance allocated to each side at open time (KB).
     Total channel capacity = 2 × this value. Default 1 TB per side."""
 
-    timestamp_tolerance_sec: float = 30.0
+    timestamp_tolerance_sec: float
     """Maximum allowed clock skew between two satellites during the auth
     handshake (seconds). Messages outside this window are rejected."""
 
-    nonce_bytes: int = 32
+    nonce_bytes: int
     """Length of the ECDH ephemeral nonce exchanged in the HELLO message
     (bytes). 32 bytes gives 256-bit entropy."""
 
@@ -69,23 +68,23 @@ class ProtocolConfig:
 class LinkConfig:
     """RF / laser link physics and contact-window thresholds."""
 
-    c_km_s: float = 299_792.458
+    c_km_s: float
     """Speed of light in vacuum (km/s), used to compute one-way ISL
     propagation delay from inter-satellite range."""
 
-    isl_max_kbps: float = 10_000.0
+    isl_max_kbps: float
     """Peak inter-satellite laser link capacity at zero separation (kbps).
     Actual capacity scales with range; see WindowCalculator."""
 
-    gs_max_kbps: float = 50_000.0
+    gs_max_kbps: float
     """Peak ground-station uplink/downlink capacity at minimum elevation
     angle (kbps). Used to bound GS contact throughput."""
 
-    isl_max_range_km: float = 2_500.0
+    isl_max_range_km: float
     """Maximum range at which two satellites can maintain an ISL (km).
     Pairs beyond this distance are excluded from the contact plan."""
 
-    gs_min_elevation_deg: float = 5.0
+    gs_min_elevation_deg: float
     """Minimum elevation angle above the horizon required for a GS–satellite
     contact to be considered viable (degrees)."""
 
@@ -94,46 +93,79 @@ class LinkConfig:
 class SimulationConfig:
     """DES parameters, traffic shape, and PRNG seeds."""
 
-    time_step_sec: int = 30
+    time_step_sec: int
     """SGP4 orbital propagation time step used when building the contact
     plan (seconds). Smaller values increase accuracy at the cost of speed."""
 
-    arrival_rate: float = 0.01
+    arrival_rate: float
     """Poisson traffic arrival rate per ground-station node (flows/second).
     The effective network rate scales with the number of ground nodes."""
 
-    lookahead_sec: float = 600.0
+    lookahead_sec: float
     """Contact-plan lookahead window used by the traffic generator to find
     a viable next-hop contact for each flow (seconds)."""
 
-    cross_operator_bias: float = 0.7
+    cross_operator_bias: float
     """Probability that a generated flow is destined for a satellite owned
     by a different operator (drives inter-operator forwarding demand)."""
 
-    random_seed: int = 42
+    random_seed: int
     """Default PRNG seed for all stochastic components (traffic generator,
     adversarial node). Override per experiment for independent runs."""
 
-    p_attack: float = 0.5
+    p_attack: float
     """Probability that a malicious satellite attacks each eligible
     forwarding event (rollback or selective-forward, depending on mode)."""
+
+    flow_size_min_kb: int
+    """Lower clamp on the log-normal flow size distribution (KB).
+    Flows smaller than this are rounded up to this value."""
+
+    flow_size_max_kb: int
+    """Upper clamp on the log-normal flow size distribution (KB).
+    Flows larger than channel_balance_kb will still be dropped at the
+    satellite due to insufficient balance, so set both in tandem."""
 
 
 @dataclass
 class CryptoConfig:
     """PKI defaults."""
 
-    cert_valid_days: int = 90
+    cert_valid_days: int
     """Validity period for satellite operational certificates (days).
     After expiry the satellite must obtain a renewed cert from its operator CA."""
 
 
 @dataclass
+class BlockchainConfig:
+    """Hyperledger Fabric network integration settings."""
+
+    network_config_path: str
+    """Path to network_config.json relative to lios/.  Written by
+    lios/evaluation/start_network.sh; read by FabricClient at runtime."""
+
+    operator_channel_balance_kb: float
+    """On-chain operator channel balance per side (KB).  Set large enough to
+    cover the sum of all satellite sub-channel allocations."""
+
+    operator_channel_reserve_kb: float
+    """Penalty reserve locked per bilateral operator channel (KB)."""
+
+    commit_latency_sec: float
+    """Simulated Fabric block-ordering + commit delay (seconds).
+    In production, Hyperledger Fabric typically takes 1–3 s to order and
+    commit a transaction.  The FabricMock uses this value to schedule
+    SETTLEMENT_FINALIZED at t + commit_latency rather than synchronously,
+    so that blockchain_sec reflects a realistic on-chain delay."""
+
+
+@dataclass
 class LIOSConfig:
-    protocol:   ProtocolConfig   = field(default_factory=ProtocolConfig)
-    link:       LinkConfig       = field(default_factory=LinkConfig)
-    simulation: SimulationConfig = field(default_factory=SimulationConfig)
-    crypto:     CryptoConfig     = field(default_factory=CryptoConfig)
+    protocol:    ProtocolConfig
+    link:        LinkConfig
+    simulation:  SimulationConfig
+    crypto:      CryptoConfig
+    blockchain:  BlockchainConfig
 
 
 # ── Loader ─────────────────────────────────────────────────────────────────────
@@ -142,18 +174,22 @@ _DEFAULT_PATH = Path(__file__).parent / "config.toml"
 
 
 def load(path: Path | None = None) -> LIOSConfig:
-    """Load and return a ``LIOSConfig`` from *path* (or the default location).
+    """Load and return a ``LIOSConfig`` from *path* (or ``config.toml``).
 
-    Returns a config with hardcoded defaults if the file does not exist.
-    Unknown keys in the TOML file are silently ignored so that older config
-    files remain compatible with newer code.
+    Raises ``FileNotFoundError`` if the TOML file cannot be found so that
+    misconfiguration is never silently swallowed.
+    Unknown keys in the TOML file are silently ignored for forward
+    compatibility with newer config files.
     """
     env_val = os.environ.get("LIOS_CONFIG", "")
     resolved: Path = path if path else (Path(env_val) if env_val else _DEFAULT_PATH)
     if not resolved.is_file():
         resolved = _DEFAULT_PATH
     if not resolved.is_file():
-        return LIOSConfig()
+        raise FileNotFoundError(
+            f"LIOS config file not found: {resolved}\n"
+            "Copy lios/config.toml next to the source or set LIOS_CONFIG."
+        )
 
     with resolved.open("rb") as fh:
         raw = tomllib.load(fh)
@@ -164,10 +200,11 @@ def load(path: Path | None = None) -> LIOSConfig:
         return cls(**{k: v for k, v in data.items() if k in known})
 
     return LIOSConfig(
-        protocol=_section(ProtocolConfig,   "protocol"),
-        link=_section(LinkConfig,           "link"),
+        protocol=_section(ProtocolConfig,     "protocol"),
+        link=_section(LinkConfig,             "link"),
         simulation=_section(SimulationConfig, "simulation"),
-        crypto=_section(CryptoConfig,       "crypto"),
+        crypto=_section(CryptoConfig,         "crypto"),
+        blockchain=_section(BlockchainConfig,  "blockchain"),
     )
 
 

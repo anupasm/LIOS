@@ -7,7 +7,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import pytest
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from crypto.hash_chain import HashChainLog, _GENESIS_HASH
 from crypto.key_hierarchy import OperatorCA, SatelliteKeyStore, _sign, _verify, _canonical_json
 
 
@@ -78,61 +77,6 @@ class TestSatelliteKeyStore:
         assert not ks.is_revoked("opA-s1")
         ks.update_revocation_cache(["opA-s1"])
         assert ks.is_revoked("opA-s1")
-
-
-class TestHashChain:
-    def setup_method(self):
-        self.chain = HashChainLog("test_channel")
-
-    def test_initial_head_is_genesis(self):
-        assert self.chain.get_head() == _GENESIS_HASH
-
-    def test_append_increments_length(self):
-        self.chain.append(1024, "A_to_B", 0.0, "sig1")
-        assert self.chain.length() == 1
-
-    def test_chain_head_changes(self):
-        h0 = self.chain.get_head()
-        self.chain.append(1024, "A_to_B", 0.0, "sig1")
-        assert self.chain.get_head() != h0
-
-    def test_verify_chain_passes(self):
-        for i in range(10):
-            self.chain.append(100 * (i + 1), "A_to_B", float(i), f"sig{i}")
-        assert self.chain.verify_chain()
-
-    def test_tamper_detection(self):
-        for i in range(5):
-            self.chain.append(100, "A_to_B", float(i), "sig")
-        # Tamper with the second entry
-        self.chain._entries[1].bytes_forwarded = 99999
-        assert not self.chain.verify_chain()
-
-    def test_prev_hash_linkage(self):
-        e1 = self.chain.append(100, "A_to_B", 0.0, "sig1")
-        e2 = self.chain.append(200, "B_to_A", 1.0, "sig2")
-        assert e2.prev_hash == e1.entry_hash
-
-    def test_get_entries_since(self):
-        for i in range(6):
-            self.chain.append(100, "A_to_B", float(i), "sig")
-        recent = self.chain.get_entries_since(3)
-        assert len(recent) == 3
-
-    def test_serialise_produces_bytes(self):
-        self.chain.append(512, "A_to_B", 0.0, "sig")
-        b = self.chain.serialise()
-        assert isinstance(b, bytes)
-        assert b"test_channel" in b
-
-    def test_direction_validated(self):
-        with pytest.raises(AssertionError):
-            self.chain.append(100, "invalid_direction", 0.0, "sig")
-
-    def test_monotonic_seq_num(self):
-        e1 = self.chain.append(100, "A_to_B", 0.0, "sig1")
-        e2 = self.chain.append(200, "B_to_A", 1.0, "sig2")
-        assert e2.seq_num == e1.seq_num + 1
 
 
 class TestECDSA:

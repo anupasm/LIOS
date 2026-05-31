@@ -15,22 +15,25 @@
 [protocol]
 
 # T1 trigger: balance below this fraction of initial_capacity triggers settlement
-t_low_fraction = 0.05           # 5 %
+t_low_fraction = 0.2           # 20 %
 
-# T2 trigger: hash chain length ceiling before mandatory settlement
-h_max = 10_000
+# T7 trigger: cumulative bytes forwarded in one session (KB).
+# 3 MB ≈ 2× the median flow size (1 MB) so T7 fires after ~2 flows per channel.
+s_max_kb = 30000
 
-# T7 trigger: cumulative bytes forwarded in one session (KB).  100 GB = 102_400_000 KB
-s_max_kb = 102_400_000
-
-# On-chain challenge window after initiateSettlement() (seconds).  48 h
-t_challenge_sec = 172_800.0
+# On-chain challenge window after initiateSettlement() (seconds).
+# Protocol spec: 48 h (172_800).  Reduced to 3 600 s (1 h) so the fallback
+# CHALLENGE_WINDOW_EXPIRE path completes within the shortest simulation
+# (baseline = 3 600 s).  The mutual-finalization path (both GS submit) makes
+# this window irrelevant for honest runs; it only matters for adversarial tests.
+t_challenge_sec = 3_600.0
 
 # Deadline for top-up confirmation by counterpart GS (seconds).  24 h
 t_topup_confirm_sec = 86_400.0
 
-# Initial channel balance per side (KB).  1 TB = 1_048_576 KB
-channel_balance_kb = 1_048_576
+# Initial channel balance per side (KB).
+# 10 MB for simulation (production would use 1 TB = 1_048_576 KB).
+channel_balance_kb = 10_240
 
 # Auth handshake: maximum clock skew between satellites (seconds)
 timestamp_tolerance_sec = 30.0
@@ -79,9 +82,36 @@ random_seed = 42
 # Adversarial node: probability of attacking each eligible forwarding event
 p_attack = 0.5
 
+# Traffic flow size bounds for the log-normal size distribution (KB)
+# Lower clamp: minimum flow size.  10 KB = one small chunk.
+flow_size_min_kb = 10
+# Upper clamp: maximum flow size.  200_000 KB = ~200 MB
+flow_size_max_kb = 200000
+
 # ── Cryptographic PKI ──────────────────────────────────────────────────────────
 
 [crypto]
 
 # Default satellite certificate validity (days)
 cert_valid_days = 90
+
+# ── Hyperledger Fabric integration ─────────────────────────────────────────────
+
+[blockchain]
+
+# Path to the generated network config (relative to the lios/ source directory).
+# Written by lios/evaluation/start_network.sh after the Fablo network starts.
+network_config_path = "blockchain/network_config.json"
+
+# On-chain operator channel balance per side (KB).  Set high enough to cover
+# all satellite sub-channels across the experiment.  1 PB ≈ effectively unlimited.
+operator_channel_balance_kb = 1_000_000_000.0
+
+# Penalty reserve per operator per bilateral channel (KB).
+operator_channel_reserve_kb = 10_000_000.0
+
+# Simulated Fabric block-ordering + commit delay (seconds).
+# Hyperledger Fabric consensus (Raft) + commit typically takes 1–3 s.
+# Setting this > 0 ensures blockchain_sec reflects a realistic on-chain
+# latency rather than the zero produced by the synchronous in-memory mock.
+commit_latency_sec = 2.0

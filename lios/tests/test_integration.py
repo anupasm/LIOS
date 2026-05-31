@@ -18,7 +18,7 @@ from evaluation.metrics import MetricsCollector
 from ground.settlement_manager import SettlementManager
 from protocol.auth import ContactAuthSession
 from protocol.isl_state_machine import ISLStateMachine
-from protocol.offchain import H_MAX, OffChainProtocol, T_LOW_FRACTION
+from protocol.offchain import OffChainProtocol, T_LOW_FRACTION
 from simulator.ground_station_node import FabricMock, GroundStationNode
 from simulator.satellite_node import SatelliteNode, create_satellite
 from simulator.simulator import EventLoop, EventType, SimEvent
@@ -104,7 +104,7 @@ class TestOffChainForwarding:
         return proto_a, proto_b, ch_id, priv_a.public_key(), priv_b.public_key()
 
     def test_off_chain_forwarding(self, full_simulation_setup):
-        """BalProofs updated after forwarding; hash chain integrity; conservation."""
+        """BalProofs updated after forwarding and conservation invariant holds."""
         cas = full_simulation_setup["cas"]
         pa, pb, ch_id, pub_a, pub_b = self._proto_pair(cas, "opA", "opB")
         fwd_kb = 1000.0
@@ -113,10 +113,7 @@ class TestOffChainForwarding:
         ch = pa.get_channel(ch_id)
         assert ch.balance_a_kb == BALANCE_KB - fwd_kb
         assert ch.balance_b_kb == BALANCE_KB + fwd_kb
-        # Conservation invariant
         assert abs(ch.balance_a_kb + ch.balance_b_kb - ch.initial_capacity_kb) < 1e-6
-        # Hash chain integrity
-        assert ch.hash_chain.verify_chain()
 
     def test_balance_conservation_multi_forward(self, full_simulation_setup):
         """Conservation holds after many forwarding steps."""
@@ -126,7 +123,6 @@ class TestOffChainForwarding:
             pa.record_forwarding(ch_id, 100.0, pub_b, float(i), b"\x00" * 72)
         ch = pa.get_channel(ch_id)
         assert abs(ch.balance_a_kb + ch.balance_b_kb - ch.initial_capacity_kb) < 1e-6
-        assert ch.hash_chain.verify_chain()
 
 
 class TestSettlementTriggers:
@@ -148,21 +144,6 @@ class TestSettlementTriggers:
         proto, ch_id = self._drain_to_low(cas)
         triggers = proto.evaluate_settlement_triggers(ch_id)
         assert "T1" in triggers
-
-    def test_settlement_trigger_t2_hash_chain_full(self, full_simulation_setup):
-        """T2 trigger fires when hash chain reaches H_MAX."""
-        cas = full_simulation_setup["cas"]
-        cert, priv = cas["opB"].issue_for_new_key("hmax-s1", permitted_operators=OPERATORS)
-        proto = OffChainProtocol("hmax-s1", priv, cert)
-        cert_b, priv_b = cas["opC"].issue_for_new_key("hmax-s2", permitted_operators=OPERATORS)
-        ch_id = "hmax-s1__hmax-s2"
-        proto.open_channel(ch_id, "op_ch", "hmax-s2", BALANCE_KB * 1000, "A")
-        ch = proto.get_channel(ch_id)
-        # Append H_MAX entries directly to the hash chain
-        for i in range(H_MAX):
-            ch.hash_chain.append(1, "A_to_B", float(i), "")
-        triggers = proto.evaluate_settlement_triggers(ch_id)
-        assert "T2" in triggers
 
 
 class TestMutualSettlement:
@@ -248,7 +229,6 @@ class TestRollbackAttack:
             channel_id=ch_id, seq_num=2,
             balance_a_kb=BALANCE_KB + 300,  # attacker claims higher balance
             balance_b_kb=BALANCE_KB - 300,
-            hash_chain_head_a="0" * 64, hash_chain_head_b="0" * 64,
         )
 
         fabric.initiate_settlement(ch_id, old_proof, "opA", 1000.0)

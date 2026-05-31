@@ -71,13 +71,21 @@ class SatelliteNode:
 
         self._protocol = OffChainProtocol(satellite_id, private_key, cert)
         self._auth_sessions: Dict[str, ContactAuthSession] = {}  # peer_id → session
+        # Settlement payloads waiting for the peer's PROOF_ACK before being queued.
+        self._pending_cosign: Dict[str, SettlementPayload] = {}
 
         # Pending settlement payloads to upload to GS on next contact
         self._pending_settlement: Dict[str, SettlementPayload] = {}
+        # ISL metadata stashed at trigger-fire time, consumed by _queue_and_maybe_upload
+        # to emit SETTLEMENT_QUEUED with the correct isl_prop_delay_sec.
+        self._settlement_meta: Dict[str, dict] = {}
         # Unacked notifications from GS
         self._pending_notif: List[NotificationBundle] = []
-        # Active ISL contacts
-        self._active_isls: Set[str] = set()  # peer sat IDs
+        # Active ISL contacts: peer_id → contact_id
+        self._active_isls: Dict[str, str] = {}
+        # Active GS contacts: gs_id → {start_time, range_km, prop_delay_sec}
+        # prop_delay_sec = range_km / c  (one-way propagation, Bhattacherjee & Singla CoNEXT 2019 §3.1)
+        self._active_gs: Dict[str, dict] = {}
         # Event log for metrics
         self.event_log: List[dict] = []
 
@@ -97,6 +105,10 @@ class SatelliteNode:
             return self._on_traffic_arrive(event)
         elif event.event_type == EventType.NOTIFICATION_DELIVER:
             return self._on_notification_deliver(event)
+        elif event.event_type == EventType.PROOF_PROP:
+            return self._on_proof_prop(event)
+        elif event.event_type == EventType.PROOF_ACK:
+            return self._on_proof_ack(event)
         return []
 
     # ── ISL contact lifecycle ──────────────────────────────────────────────────
@@ -104,11 +116,23 @@ class SatelliteNode:
     def _on_isl_open(self, event: SimEvent) -> List[SimEvent]:
         peer_id = event.from_node if event.to_node == self.satellite_id else event.to_node
         contact = event.payload
-        channel_id = self._channel_id(peer_id)
+        contact_id = contact.contact_id if contact else ""
+        self._active_isls[peer_id] = contact_id
 
-        # Ensure channel state exists (idempotent)
+        range_km = getattr(contact, "range_km", 0.0) if contact else 0.0
+        isl_prop_delay_sec = range_km / cfg.link.c_km_s if range_km > 0 else 0.0
+        self._log("ISL_OPEN", peer_id=peer_id, contact_id=contact_id, t=event.time,
+                  isl_range_km=round(range_km, 3),
+                  isl_prop_delay_sec=round(isl_prop_delay_sec, 6))
+
+        # No settlement channel between satellites of the same operator.
+        if self._is_same_operator(peer_id):
+            return []
+
+        channel_id = self._channel_id(peer_id)
         if self._protocol.get_channel(channel_id) is None:
-            op_ch_id = f"{self.operator_id}_{self._peer_operator(peer_id)}_ch"
+            op_a, op_b = sorted([self.operator_id, self._peer_operator(peer_id)])
+            op_ch_id = f"{op_a}_{op_b}_ch"
             role = "A" if self.satellite_id < peer_id else "B"
             self._protocol.open_channel(channel_id, op_ch_id, peer_id, CHANNEL_BALANCE_KB, role)
             self._isl_fsm.register_channel(
@@ -117,38 +141,85 @@ class SatelliteNode:
                 sat_b=peer_id if role == "A" else self.satellite_id,
             )
 
-        self._active_isls.add(peer_id)
-        self._log("ISL_OPEN", peer_id=peer_id, t=event.time)
-
-        # Authenticate (simplified: assume cert already verified by key store)
         state = self._protocol.get_channel(channel_id)
-        if state:
+        if state and state.status != "PAUSED":
             self._protocol.resume_channel(channel_id)
 
         return []
 
     def _on_isl_close(self, event: SimEvent) -> List[SimEvent]:
         peer_id = event.from_node if event.to_node == self.satellite_id else event.to_node
-        channel_id = self._channel_id(peer_id)
         t = event.time
 
-        self._active_isls.discard(peer_id)
-        self._log("ISL_CLOSE", peer_id=peer_id, t=t)
+        contact_id = self._active_isls.pop(peer_id, "")
 
-        # Evaluate settlement triggers at contact-end
+        contact = event.payload
+        range_km = getattr(contact, "range_km", 0.0) if contact else 0.0
+        isl_prop_delay_sec = range_km / cfg.link.c_km_s if range_km > 0 else 0.0
+        self._log("ISL_CLOSE", peer_id=peer_id, contact_id=contact_id, t=t,
+                  isl_range_km=round(range_km, 3),
+                  isl_prop_delay_sec=round(isl_prop_delay_sec, 6))
+
+        # No settlement between same-operator satellites.
+        if self._is_same_operator(peer_id):
+            return []
+
+        channel_id = self._channel_id(peer_id)
+
+        # Evaluate settlement triggers at contact-end; skip if channel already paused.
+        ch_state = self._protocol.get_channel(channel_id)
         triggers = self._protocol.evaluate_settlement_triggers(channel_id)
-        if triggers:
-            # Pause channel immediately at contact-end
+        if triggers and (ch_state is None or ch_state.status != "PAUSED"):
+            # Pause both satellites immediately at contact-end (traffic stops).
             self._isl_fsm.record_contact_end_pause(
                 channel_id, t, self.operator_id, "SETTLEMENT"
             )
             self._protocol.pause_channel(channel_id)
 
-            # Queue settlement payload for next GS upload
             payload = self._protocol.get_settlement_payload(channel_id)
             if payload:
-                self._pending_settlement[channel_id] = payload
-                self._log("SETTLEMENT_QUEUED", channel_id=channel_id, triggers=triggers, t=t)
+                payload.contact_id = contact_id
+                payload.queued_at = t
+                proof = payload.latest_proof
+                ch = self._protocol.get_channel(channel_id)
+                self._log(
+                    "SETTLEMENT_TRIGGERED",
+                    channel_id=channel_id,
+                    contact_id=contact_id,
+                    triggers=triggers,
+                    seq_num=ch.seq_num if ch else None,
+                    balance_a_kb=ch.balance_a_kb if ch else None,
+                    balance_b_kb=ch.balance_b_kb if ch else None,
+                    isl_range_km=round(range_km, 3),
+                    t=t,
+                )
+                # Stash ISL geometry for SETTLEMENT_QUEUED log emitted in _queue_and_maybe_upload
+                self._settlement_meta[channel_id] = {
+                    "isl_prop_delay_sec": isl_prop_delay_sec,
+                    "isl_range_km": range_km,
+                }
+
+                if proof and proof.sig_a and proof.sig_b:
+                    # Already co-signed — queue immediately.
+                    return self._queue_and_maybe_upload(channel_id, payload, t)
+
+                # Not yet co-signed: send PROOF_PROP to peer so it can cosign.
+                # The peer returns PROOF_ACK (also over the ISL) and we queue
+                # the settlement payload once both signatures are present.
+                self._pending_cosign[channel_id] = payload
+                return [SimEvent(
+                    time=t + isl_prop_delay_sec,
+                    event_type=EventType.PROOF_PROP,
+                    from_node=self.satellite_id,
+                    to_node=peer_id,
+                    payload={
+                        "channel_id": channel_id,
+                        "proof": proof,
+                        "sender_pub_key": self._priv.public_key(),
+                        "isl_prop_delay_sec": isl_prop_delay_sec,
+                        "triggers": triggers,  # forwarded so peer labels its payload correctly
+                    },
+                )]
 
         return []
 
@@ -156,16 +227,48 @@ class SatelliteNode:
 
     def _on_gs_contact_start(self, event: SimEvent) -> List[SimEvent]:
         gs_id = event.from_node
-        self._log("GS_CONTACT_START", gs_id=gs_id, t=event.time)
-        # Signal GS with settlement payloads (carried in payload field)
-        return []
+        t = event.time
+        contact = event.payload
+        range_km = getattr(contact, "range_km", 0.0) if contact else 0.0
+        # One-way propagation delay: d/c (Bhattacherjee & Singla, CoNEXT 2019 §3.1)
+        prop_delay_sec = range_km / cfg.link.c_km_s if range_km > 0 else 0.0
+        self._active_gs[gs_id] = {
+            "start_time": t,
+            "range_km": range_km,
+            "prop_delay_sec": prop_delay_sec,
+        }
+        self._log("GS_CONTACT_START", gs_id=gs_id, t=t,
+                  gs_range_km=round(range_km, 3),
+                  gs_prop_delay_sec=round(prop_delay_sec, 6))
+        events = self._upload_pending_settlements(gs_id, t + prop_delay_sec)
+        self._pending_settlement.clear()
+        return events
 
     def _on_gs_contact_end(self, event: SimEvent) -> List[SimEvent]:
         gs_id = event.from_node
-        self._log("GS_CONTACT_END", gs_id=gs_id, t=event.time)
-        # Settlement payloads drained during contact; clear any stale entries
+        t = event.time
+        gs_info = self._active_gs.get(gs_id, {})
+        prop_delay_sec = gs_info.get("prop_delay_sec", 0.0)
+        self._log("GS_CONTACT_END", gs_id=gs_id, t=t)
+        # Final sweep: upload anything queued during this contact window.
+        new_events = self._upload_pending_settlements(gs_id, t + prop_delay_sec)
+        self._active_gs.pop(gs_id, None)
         self._pending_settlement.clear()
-        return []
+        return new_events
+
+    def _upload_pending_settlements(self, gs_id: str, t: float) -> List[SimEvent]:
+        # Route through get_pending_settlement_payloads so subclass overrides
+        # (e.g. MaliciousSatelliteNode rollback substitution) are respected.
+        return [
+            SimEvent(
+                time=t,
+                event_type=EventType.SETTLEMENT_UPLOAD,
+                from_node=self.satellite_id,
+                to_node=gs_id,
+                payload=payload,
+            )
+            for payload in self.get_pending_settlement_payloads()
+        ]
 
     # ── Traffic forwarding ─────────────────────────────────────────────────────
 
@@ -173,29 +276,178 @@ class SatelliteNode:
         flow = event.payload
         if flow is None:
             return []
-        channel_id = self._channel_id(event.from_node)
         t = event.time
 
+        # Find this satellite's position in the path and identify the next ISL hop.
+        # event.from_node is the originating ground station, not a channel peer.
+        hops = flow.path.hops if flow.path else []
+        try:
+            my_idx = hops.index(self.satellite_id)
+        except ValueError:
+            self._log("TRAFFIC_DROPPED", reason="not_in_path", t=t)
+            return []
+
+        if my_idx + 1 >= len(hops):
+            # Final destination — no ISL channel to charge.
+            self._log("TRAFFIC_DELIVERED", bytes_kb=flow.size_kb, t=t)
+            return []
+
+        next_hop = hops[my_idx + 1]
+        channel_id = self._channel_id(next_hop)
+
+        if next_hop not in self._active_isls:
+            self._log("TRAFFIC_DROPPED", reason="no_active_isl_contact",
+                      channel_id=channel_id, next_hop=next_hop, t=t)
+            return []
+
+        # Same-operator hops have no settlement channel — forward freely.
+        if self._is_same_operator(next_hop):
+            self._log("TRAFFIC_FORWARDED", bytes_kb=flow.size_kb, t=t, channel_id=channel_id)
+            return []
+
         if not self._protocol.can_forward(channel_id):
-            self._log("TRAFFIC_DROPPED", reason="channel_not_active", t=t)
+            self._log("TRAFFIC_DROPPED", reason="channel_not_active",
+                      channel_id=channel_id, next_hop=next_hop, t=t)
             return []
 
         state = self._protocol.get_channel(channel_id)
         if state is None or state.my_balance() < flow.size_kb:
-            self._log("TRAFFIC_DROPPED", reason="insufficient_balance", t=t)
+            self._log("TRAFFIC_DROPPED", reason="insufficient_balance",
+                      channel_id=channel_id, t=t)
             return []
 
-        # Build a dummy peer_ack_sig for the hash chain entry
         dummy_sig = _sign(self._priv, f"{channel_id}:{t}:{flow.size_kb}".encode())
-        peer_pub = self._ks._operator_keys.get(self._peer_operator(event.from_node))
+        peer_pub = self._ks._operator_keys.get(self._peer_operator(next_hop))
         if peer_pub is None:
-            self._log("TRAFFIC_DROPPED", reason="no_peer_key", t=t)
+            self._log("TRAFFIC_DROPPED", reason="no_peer_key",
+                      channel_id=channel_id, next_hop=next_hop, t=t)
             return []
 
+        contact_id = self._active_isls.get(next_hop, "")
         proof = self._protocol.record_forwarding(channel_id, flow.size_kb, peer_pub, t, dummy_sig)
         if proof:
             self._log("TRAFFIC_FORWARDED", bytes_kb=flow.size_kb, t=t, channel_id=channel_id)
+            self._log(
+                "OFFCHAIN_PROOF_UPDATE",
+                channel_id=channel_id,
+                contact_id=contact_id,
+                seq_num=proof.seq_num,
+                balance_a_kb=proof.balance_a_kb,
+                balance_b_kb=proof.balance_b_kb,
+                bytes_kb=flow.size_kb,
+                t=t,
+            )
 
+        return []
+
+    # ── PROOF_PROP / PROOF_ACK (ISL cosign exchange) ──────────────────────────
+
+    def _on_proof_prop(self, event: SimEvent) -> List[SimEvent]:
+        """Peer sent its half-signed proof for us to cosign (COMMIT phase PROOF_PROP).
+
+        Cosigns and returns PROOF_ACK.  After cosigning, re-evaluates settlement
+        triggers because the adopted state may differ from what was visible at
+        ISL_CLOSE (e.g. peer's balance was depleted → T1 now fires for us too).
+        """
+        data = event.payload or {}
+        channel_id = data.get("channel_id", "")
+        proof = data.get("proof")
+        sender_pub_key = data.get("sender_pub_key")
+        isl_delay = data.get("isl_prop_delay_sec", 0.0)
+        peer_triggers: List[str] = data.get("triggers", [])
+        t = event.time
+
+        if proof is None or sender_pub_key is None:
+            return []
+
+        cosigned = self._protocol.cosign_proof(channel_id, proof, sender_pub_key)
+        if cosigned is None:
+            self._log("PROOF_PROP_REJECTED", channel_id=channel_id, t=t)
+            return []
+
+        self._log("PROOF_PROP_COSIGNED", channel_id=channel_id,
+                  seq_num=cosigned.seq_num, t=t)
+
+        new_events: List[SimEvent] = [SimEvent(
+            time=t + isl_delay,
+            event_type=EventType.PROOF_ACK,
+            from_node=self.satellite_id,
+            to_node=event.from_node,
+            payload={"channel_id": channel_id, "proof": cosigned},
+        )]
+
+        # PROOF_PROP is only sent when the peer triggered settlement at contact-end.
+        # Always cooperate: pause our channel and submit the co-signed proof to our GS
+        # so that both GS submit the same seq_num → MUTUAL_FINALIZED (no Tch wait).
+        # Also catches T1/T7 conditions that became visible from the peer's proof state.
+        ch_state = self._protocol.get_channel(channel_id)
+        if ch_state and ch_state.status != "PAUSED":
+            self._isl_fsm.record_contact_end_pause(
+                channel_id, t, self.operator_id, "SETTLEMENT"
+            )
+            self._protocol.pause_channel(channel_id)
+            payload = self._protocol.get_settlement_payload(channel_id)
+            if payload:
+                payload.latest_proof = cosigned  # use the fully co-signed proof
+                # Use peer's triggers so GS log shows the actual settlement cause.
+                payload.triggers_fired = peer_triggers or payload.triggers_fired
+                payload.queued_at = t
+                new_events += self._queue_and_maybe_upload(channel_id, payload, t)
+
+        return new_events
+
+    def _on_proof_ack(self, event: SimEvent) -> List[SimEvent]:
+        """Peer returned the co-signed proof (COMMIT phase PROOF_ACK).
+
+        Adopts the co-signed proof as our latest_proof and queues the pending
+        settlement payload that was waiting on this cosign.
+        """
+        data = event.payload or {}
+        channel_id = data.get("channel_id", "")
+        cosigned = data.get("proof")
+        t = event.time
+
+        if cosigned is None:
+            return []
+
+        ch_state = self._protocol.get_channel(channel_id)
+        if ch_state and ch_state.latest_proof and \
+                ch_state.latest_proof.seq_num == cosigned.seq_num:
+            ch_state.latest_proof = cosigned
+
+        payload = self._pending_cosign.pop(channel_id, None)
+        if payload is None:
+            return []
+
+        payload.latest_proof = cosigned
+        self._log("PROOF_ACK_RECEIVED", channel_id=channel_id,
+                  seq_num=cosigned.seq_num, t=t)
+        return self._queue_and_maybe_upload(channel_id, payload, t)
+
+    def _queue_and_maybe_upload(
+        self, channel_id: str, payload: "SettlementPayload", t: float
+    ) -> List[SimEvent]:
+        """Store payload and flush to GS immediately if a contact is already open."""
+        meta = self._settlement_meta.pop(channel_id, {})
+        # Only emit on the first call per settlement cycle (meta present).
+        # _on_proof_prop and _on_proof_ack both call this method; the second
+        # call would log isl_prop_delay_sec=0 and overwrite the correct value
+        # in _compute_latency_summary, so we skip it when meta is already gone.
+        if meta:
+            self._log(
+                "SETTLEMENT_QUEUED",
+                channel_id=channel_id,
+                isl_prop_delay_sec=round(meta["isl_prop_delay_sec"], 6),
+                isl_range_km=round(meta["isl_range_km"], 3),
+                t=t,
+            )
+        self._pending_settlement[channel_id] = payload
+        if self._active_gs:
+            gs_id = next(iter(self._active_gs))
+            gs_delay = self._active_gs[gs_id].get("prop_delay_sec", 0.0)
+            events = self._upload_pending_settlements(gs_id, t + gs_delay)
+            self._pending_settlement.clear()
+            return events
         return []
 
     # ── Notification delivery ──────────────────────────────────────────────────
@@ -204,7 +456,11 @@ class SatelliteNode:
         bundle: NotificationBundle = event.payload
         if bundle is None:
             return []
-        self._log("NOTIFICATION_RECEIVED", bundle_id=bundle.bundle_id, t=event.time)
+        # downlink_prop_delay_sec = event.time - bundle.generated_at (GS sent → satellite received)
+        downlink_prop_delay_sec = round(event.time - bundle.generated_at, 6)
+        self._log("NOTIFICATION_RECEIVED", bundle_id=bundle.bundle_id, t=event.time,
+                  gs_sent_at=bundle.generated_at,
+                  downlink_prop_delay_sec=downlink_prop_delay_sec)
 
         # Process CRL delta
         if bundle.crl_delta:
@@ -214,10 +470,13 @@ class SatelliteNode:
         for notif in bundle.notifications:
             if notif.get("type") == "ISL_RESUME":
                 ch_id = notif.get("satChannelId", "")
-                ready = self._isl_fsm.record_satellite_resume_ack(ch_id, self.satellite_id, event.time)
-                if ready:
-                    self._protocol.resume_channel(ch_id)
-                    self._log("ISL_RESUMED", channel_id=ch_id, t=event.time)
+                # Proof is co-signed — mutual consent already given.  Each satellite
+                # resets its own channel state independently when its GS signals resume.
+                self._isl_fsm.record_satellite_resume_ack(ch_id, self.satellite_id, event.time)
+                self._protocol.resume_channel(ch_id)
+                self._log("ISL_RESUMED", channel_id=ch_id, t=event.time,
+                          gs_sent_at=bundle.generated_at,
+                          downlink_prop_delay_sec=downlink_prop_delay_sec)
 
         return []
 
@@ -229,6 +488,9 @@ class SatelliteNode:
 
     def _peer_operator(self, peer_id: str) -> str:
         return peer_id.split("-")[0] if "-" in peer_id else "unknown"
+
+    def _is_same_operator(self, peer_id: str) -> bool:
+        return self.operator_id == self._peer_operator(peer_id)
 
     def _log(self, event_type: str, **kwargs) -> None:
         self.event_log.append({"event": event_type, "satellite": self.satellite_id, **kwargs})
@@ -252,8 +514,13 @@ def create_satellite(
     all_operator_cas: Dict[str, OperatorCA],
     isl_fsm: ISLStateMachine,
     permitted_operators: Optional[List[str]] = None,
+    node_class: Optional[type] = None,
 ) -> SatelliteNode:
-    """Instantiate a fully configured SatelliteNode."""
+    """Instantiate a fully configured SatelliteNode (or subclass).
+
+    Pass node_class to create a baseline-protocol variant, e.g.
+    GreedySatelliteNode, TitForTatNode, or CentralSatelliteNode.
+    """
     cert, priv = ca.issue_for_new_key(
         satellite_id,
         valid_days=90,
@@ -262,4 +529,5 @@ def create_satellite(
     ks = SatelliteKeyStore()
     for op_id, op_ca in all_operator_cas.items():
         ks.register_operator(op_id, op_ca.public_key)
-    return SatelliteNode(satellite_id, operator_id, cert, priv, ks, isl_fsm)
+    cls = node_class if node_class is not None else SatelliteNode
+    return cls(satellite_id, operator_id, cert, priv, ks, isl_fsm)

@@ -11,8 +11,10 @@ from __future__ import annotations
 import csv
 import json
 import math
+import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from multiprocessing import Pool
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -296,6 +298,114 @@ def _elevation_deg(gs_eci: np.ndarray, sat_eci: np.ndarray, gs_lat_rad: float, g
     return math.degrees(math.asin(max(-1.0, min(1.0, sin_elev))))
 
 
+# ── multiprocessing worker functions (module-level required for pickling) ──────
+
+def _isl_pair_worker(args: tuple) -> List[dict]:
+    pos_i, pos_j, ts_arr, from_id, to_id, from_op, to_op, isl_max_range_km = args
+    contacts: List[dict] = []
+    in_contact = False
+    contact_start = 0.0
+    ranges_in_contact: List[float] = []
+
+    for step_idx, t_sec in enumerate(ts_arr):
+        pi = pos_i[step_idx]
+        pj = pos_j[step_idx]
+        if pi is None or pj is None:
+            in_contact = False
+            continue
+        dist = float(np.linalg.norm(pi - pj))
+        if dist < isl_max_range_km:
+            if not in_contact:
+                in_contact = True
+                contact_start = t_sec
+                ranges_in_contact = [dist]
+            else:
+                ranges_in_contact.append(dist)
+        else:
+            if in_contact:
+                contact_end = ts_arr[step_idx - 1] if step_idx > 0 else t_sec
+                mean_range = float(np.mean(ranges_in_contact))
+                frac = 1.0 - mean_range / isl_max_range_km
+                contacts.append(dict(
+                    from_node=from_id, to_node=to_id,
+                    start_time_sec=contact_start, end_time_sec=contact_end,
+                    capacity_kbps=C_MAX_ISL_KBPS * max(0.0, frac), range_km=mean_range,
+                    node_type_from="SAT", node_type_to="SAT",
+                    operator_from=from_op, operator_to=to_op,
+                ))
+                in_contact = False
+
+    if in_contact:
+        mean_range = float(np.mean(ranges_in_contact))
+        frac = 1.0 - mean_range / isl_max_range_km
+        contacts.append(dict(
+            from_node=from_id, to_node=to_id,
+            start_time_sec=contact_start, end_time_sec=ts_arr[-1],
+            capacity_kbps=C_MAX_ISL_KBPS * max(0.0, frac), range_km=mean_range,
+            node_type_from="SAT", node_type_to="SAT",
+            operator_from=from_op, operator_to=to_op,
+        ))
+    return contacts
+
+
+def _gs_sat_worker(args: tuple) -> List[dict]:
+    (gs_id, gs_op, gs_lat_deg, gs_lon_deg, gs_alt_m, gs_min_elev,
+     sat_positions, ts_arr, epoch_jd, epoch_fr, sat_id, sat_op) = args
+    gs_lat_rad = math.radians(gs_lat_deg)
+    gs_lon_rad = math.radians(gs_lon_deg)
+    contacts: List[dict] = []
+    in_contact = False
+    contact_start = 0.0
+    ranges_in_contact: List[float] = []
+
+    for step_idx, t_sec in enumerate(ts_arr):
+        p_sat = sat_positions[step_idx]
+        if p_sat is None:
+            in_contact = False
+            continue
+        delta_days = t_sec / 86400.0
+        fr_step = epoch_fr + delta_days
+        jd_step = epoch_jd + math.floor(fr_step)
+        fr_step = fr_step - math.floor(fr_step)
+        gmst = _gmst(jd_step, fr_step)
+        gs_eci = _geodetic_to_eci(gs_lat_deg, gs_lon_deg, gs_alt_m, gmst)
+        el = _elevation_deg(gs_eci, p_sat, gs_lat_rad, gs_lon_rad, gmst)
+        dist = float(np.linalg.norm(p_sat - gs_eci))
+
+        if el >= gs_min_elev:
+            if not in_contact:
+                in_contact = True
+                contact_start = t_sec
+                ranges_in_contact = [dist]
+            else:
+                ranges_in_contact.append(dist)
+        else:
+            if in_contact:
+                contact_end = ts_arr[step_idx - 1] if step_idx > 0 else t_sec
+                mean_range = float(np.mean(ranges_in_contact))
+                frac = 1.0 - mean_range / 3000.0
+                contacts.append(dict(
+                    from_node=gs_id, to_node=sat_id,
+                    start_time_sec=contact_start, end_time_sec=contact_end,
+                    capacity_kbps=C_MAX_GS_KBPS * max(0.0, frac), range_km=mean_range,
+                    node_type_from="GS", node_type_to="SAT",
+                    operator_from=gs_op, operator_to=sat_op,
+                ))
+                in_contact = False
+
+    if in_contact:
+        mean_range = float(np.mean(ranges_in_contact))
+        frac = 1.0 - mean_range / 3000.0
+        contacts.append(dict(
+            from_node=gs_id, to_node=sat_id,
+            start_time_sec=contact_start, end_time_sec=ts_arr[-1],
+            capacity_kbps=C_MAX_GS_KBPS * max(0.0, frac), range_km=mean_range,
+            node_type_from="GS", node_type_to="SAT",
+            operator_from=gs_op, operator_to=sat_op,
+        ))
+    return contacts
+
+
 class WindowCalculator:
     """Propagates all satellites and computes contact windows."""
 
@@ -317,6 +427,7 @@ class WindowCalculator:
         self,
         operators: Dict[str, List[Satellite]],
         ground_stations: Dict[str, List[GroundStation]],
+        n_workers: Optional[int] = None,
     ) -> ContactPlan:
         cp = ContactPlan(epoch=self.t_start)
         all_sats: List[Satellite] = [s for sats in operators.values() for s in sats]
@@ -326,21 +437,21 @@ class WindowCalculator:
         steps = int(duration_sec / self.time_step_sec) + 1
         ts_arr = [i * self.time_step_sec for i in range(steps)]
 
-        # Pre-compute epoch in Julian date
         epoch_jd, epoch_fr = jday(
             self.t_start.year, self.t_start.month, self.t_start.day,
             self.t_start.hour, self.t_start.minute,
             self.t_start.second + self.t_start.microsecond / 1e6,
         )
 
-        # Propagate all satellites at every time step
-        n_sats = len(all_sats)
-        positions: List[List[Optional[np.ndarray]]] = [[None] * steps for _ in range(n_sats)]
         _logging = self.propagation_log_path is not None
+        n_sats = len(all_sats)
+        workers = n_workers or os.cpu_count() or 1
+
+        # ── Phase 1: Serial satellite propagation (Satrec is not picklable) ───
+        positions: List[List[Optional[np.ndarray]]] = [[None] * steps for _ in range(n_sats)]
         _geo: List[List[Optional[Tuple[float, float, float]]]] = (
             [[None] * steps for _ in range(n_sats)] if _logging else []
         )
-
         for step_idx, t_sec in enumerate(ts_arr):
             delta_days = t_sec / 86400.0
             fr_step = epoch_fr + delta_days
@@ -353,145 +464,38 @@ class WindowCalculator:
                 if _logging and pos is not None:
                     _geo[si][step_idx] = _eci_to_geodetic(pos, gmst)
 
-        contact_counter = 0
+        # ── Phase 2: Parallel ISL pair processing ──────────────────────────────
+        isl_args = [
+            (positions[i], positions[j], ts_arr,
+             all_sats[i].sat_id, all_sats[j].sat_id,
+             all_sats[i].operator_id, all_sats[j].operator_id,
+             self.isl_max_range_km)
+            for i in range(n_sats)
+            for j in range(i + 1, n_sats)
+        ]
+        raw_contacts: List[dict] = []
+        if isl_args:
+            with Pool(processes=min(workers, len(isl_args))) as pool:
+                for pair_contacts in pool.map(_isl_pair_worker, isl_args):
+                    raw_contacts.extend(pair_contacts)
 
-        # ── Sat-sat contacts ───────────────────────────────────────────────────
-        for i in range(n_sats):
-            for j in range(i + 1, n_sats):
-                sat_i = all_sats[i]
-                sat_j = all_sats[j]
-                in_contact = False
-                contact_start = 0.0
-                ranges_in_contact: List[float] = []
+        # ── Phase 3: Parallel GS-sat processing ───────────────────────────────
+        gs_args = [
+            (gs.gs_id, gs.operator_id, gs.lat_deg, gs.lon_deg, gs.alt_m,
+             gs.min_elevation_deg, positions[si],
+             ts_arr, epoch_jd, epoch_fr, sat.sat_id, sat.operator_id)
+            for gs in all_gs
+            for si, sat in enumerate(all_sats)
+        ]
+        if gs_args:
+            with Pool(processes=min(workers, len(gs_args))) as pool:
+                for gs_contacts in pool.map(_gs_sat_worker, gs_args):
+                    raw_contacts.extend(gs_contacts)
 
-                for step_idx, t_sec in enumerate(ts_arr):
-                    pi = positions[i][step_idx]
-                    pj = positions[j][step_idx]
-                    if pi is None or pj is None:
-                        in_contact = False
-                        continue
-                    dist = float(np.linalg.norm(pi - pj))
-                    if dist < self.isl_max_range_km:
-                        if not in_contact:
-                            in_contact = True
-                            contact_start = t_sec
-                            ranges_in_contact = [dist]
-                        else:
-                            ranges_in_contact.append(dist)
-                    else:
-                        if in_contact:
-                            contact_end = ts_arr[step_idx - 1] if step_idx > 0 else t_sec
-                            mean_range = float(np.mean(ranges_in_contact))
-                            frac = 1.0 - mean_range / self.isl_max_range_km
-                            cap = C_MAX_ISL_KBPS * max(0.0, frac)
-                            contact_counter += 1
-                            cp.contacts.append(Contact(
-                                contact_id=f"C{contact_counter:06d}",
-                                from_node=sat_i.sat_id,
-                                to_node=sat_j.sat_id,
-                                start_time_sec=contact_start,
-                                end_time_sec=contact_end,
-                                capacity_kbps=cap,
-                                range_km=mean_range,
-                                node_type_from="SAT",
-                                node_type_to="SAT",
-                                operator_from=sat_i.operator_id,
-                                operator_to=sat_j.operator_id,
-                            ))
-                            in_contact = False
-
-                if in_contact:
-                    mean_range = float(np.mean(ranges_in_contact))
-                    frac = 1.0 - mean_range / self.isl_max_range_km
-                    cap = C_MAX_ISL_KBPS * max(0.0, frac)
-                    contact_counter += 1
-                    cp.contacts.append(Contact(
-                        contact_id=f"C{contact_counter:06d}",
-                        from_node=sat_i.sat_id,
-                        to_node=sat_j.sat_id,
-                        start_time_sec=contact_start,
-                        end_time_sec=ts_arr[-1],
-                        capacity_kbps=cap,
-                        range_km=mean_range,
-                        node_type_from="SAT",
-                        node_type_to="SAT",
-                        operator_from=sat_i.operator_id,
-                        operator_to=sat_j.operator_id,
-                    ))
-
-        # ── GS-sat contacts ────────────────────────────────────────────────────
-        for gs in all_gs:
-            gs_lat_rad = math.radians(gs.lat_deg)
-            gs_lon_rad = math.radians(gs.lon_deg)
-
-            for si, sat in enumerate(all_sats):
-                in_contact = False
-                contact_start = 0.0
-                ranges_in_contact = []
-
-                for step_idx, t_sec in enumerate(ts_arr):
-                    p_sat = positions[si][step_idx]
-                    if p_sat is None:
-                        in_contact = False
-                        continue
-                    delta_days = t_sec / 86400.0
-                    fr_step = epoch_fr + delta_days
-                    jd_step = epoch_jd + math.floor(fr_step)
-                    fr_step = fr_step - math.floor(fr_step)
-                    gmst = _gmst(jd_step, fr_step)
-                    gs_eci = _geodetic_to_eci(gs.lat_deg, gs.lon_deg, gs.alt_m, gmst)
-                    el = _elevation_deg(gs_eci, p_sat, gs_lat_rad, gs_lon_rad, gmst)
-                    dist = float(np.linalg.norm(p_sat - gs_eci))
-
-                    if el >= gs.min_elevation_deg:
-                        if not in_contact:
-                            in_contact = True
-                            contact_start = t_sec
-                            ranges_in_contact = [dist]
-                        else:
-                            ranges_in_contact.append(dist)
-                    else:
-                        if in_contact:
-                            contact_end = ts_arr[step_idx - 1] if step_idx > 0 else t_sec
-                            mean_range = float(np.mean(ranges_in_contact))
-                            frac = 1.0 - mean_range / 3000.0
-                            cap = C_MAX_GS_KBPS * max(0.0, frac)
-                            contact_counter += 1
-                            cp.contacts.append(Contact(
-                                contact_id=f"C{contact_counter:06d}",
-                                from_node=gs.gs_id,
-                                to_node=sat.sat_id,
-                                start_time_sec=contact_start,
-                                end_time_sec=contact_end,
-                                capacity_kbps=cap,
-                                range_km=mean_range,
-                                node_type_from="GS",
-                                node_type_to="SAT",
-                                operator_from=gs.operator_id,
-                                operator_to=sat.operator_id,
-                            ))
-                            in_contact = False
-
-                if in_contact:
-                    mean_range = float(np.mean(ranges_in_contact))
-                    frac = 1.0 - mean_range / 3000.0
-                    cap = C_MAX_GS_KBPS * max(0.0, frac)
-                    contact_counter += 1
-                    cp.contacts.append(Contact(
-                        contact_id=f"C{contact_counter:06d}",
-                        from_node=gs.gs_id,
-                        to_node=sat.sat_id,
-                        start_time_sec=contact_start,
-                        end_time_sec=ts_arr[-1],
-                        capacity_kbps=cap,
-                        range_km=mean_range,
-                        node_type_from="GS",
-                        node_type_to="SAT",
-                        operator_from=gs.operator_id,
-                        operator_to=sat.operator_id,
-                    ))
-
-        cp.contacts.sort(key=lambda c: c.start_time_sec)
+        # Assign stable contact IDs after sorting
+        raw_contacts.sort(key=lambda c: c["start_time_sec"])
+        for idx, c_dict in enumerate(raw_contacts, 1):
+            cp.contacts.append(Contact(contact_id=f"C{idx:06d}", **c_dict))
 
         if _logging:
             _write_propagation_log(

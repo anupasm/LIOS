@@ -24,6 +24,9 @@ class EventType(str, Enum):
     GS_CONTACT_END = "GS_CONTACT_END"
     TRAFFIC_ARRIVE = "TRAFFIC_ARRIVE"
     SETTLEMENT_TRIGGER = "SETTLEMENT_TRIGGER"
+    SETTLEMENT_UPLOAD = "SETTLEMENT_UPLOAD"
+    PROOF_PROP = "PROOF_PROP"   # half-signed proof sent from forwarder to peer for cosigning
+    PROOF_ACK  = "PROOF_ACK"   # co-signed proof returned by peer
     NOTIFICATION_DELIVER = "NOTIFICATION_DELIVER"
     TOPUP_REQUEST = "TOPUP_REQUEST"
     TOPUP_CONFIRM = "TOPUP_CONFIRM"
@@ -121,6 +124,10 @@ class EventLoop:
 
     def run(self, until: float) -> SimStats:
         """Process events in chronological order until simulation time `until`."""
+        _report_interval = max(1.0, until / 10)
+        _next_report = _report_interval
+        _wall_start = time.time()
+
         while self._queue:
             event = heapq.heappop(self._queue)
             if event.time > until:
@@ -129,6 +136,18 @@ class EventLoop:
             self.clock.set(event.time)
             self._event_log.append(event)
             self._update_stats(event)
+
+            if event.time >= _next_report:
+                pct = int(event.time * 100 / until)
+                wall_el = time.time() - _wall_start
+                rate = self.stats.events_processed / max(0.1, wall_el)
+                print(
+                    f"  Sim: {pct:3d}%  t={event.time:,.0f}/{until:,.0f}s  "
+                    f"events={self.stats.events_processed:,}  {rate:,.0f} ev/s  "
+                    f"wall={wall_el:.1f}s   ",
+                    end="\r", flush=True,
+                )
+                _next_report += _report_interval
 
             # Dispatch to the destination node's handler
             handler = self._handlers.get(event.to_node)
@@ -140,6 +159,12 @@ class EventLoop:
                     print(f"[SIM ERROR] t={event.time:.1f} handler={event.to_node} "
                           f"event={event.event_type}: {exc}")
 
+        wall_total = time.time() - _wall_start
+        print(
+            f"  Sim: done   t={until:,.0f}s  "
+            f"events={self.stats.events_processed:,}  "
+            f"wall={wall_total:.1f}s                       "
+        )
         return self.stats
 
     def _update_stats(self, e: SimEvent) -> None:
@@ -170,23 +195,27 @@ class EventLoop:
         from contact_plan.window_calculator import ContactPlan  # avoid circular
         for c in contact_plan.contacts:
             if c.node_type_from == "SAT" and c.node_type_to == "SAT":
-                self.schedule(SimEvent(
-                    time=c.start_time_sec,
-                    event_type=EventType.ISL_OPEN,
-                    from_node=c.from_node,
-                    to_node=c.to_node,
-                    payload=c,
-                ))
-                self.schedule(SimEvent(
-                    time=c.end_time_sec,
-                    event_type=EventType.ISL_CLOSE,
-                    from_node=c.from_node,
-                    to_node=c.to_node,
-                    payload=c,
-                ))
+                # Send ISL_OPEN/ISL_CLOSE to BOTH ends so each satellite registers
+                # its peer in _active_isls and can forward traffic in both directions.
+                for src, dst in [(c.from_node, c.to_node), (c.to_node, c.from_node)]:
+                    self.schedule(SimEvent(
+                        time=c.start_time_sec,
+                        event_type=EventType.ISL_OPEN,
+                        from_node=src,
+                        to_node=dst,
+                        payload=c,
+                    ))
+                    self.schedule(SimEvent(
+                        time=c.end_time_sec,
+                        event_type=EventType.ISL_CLOSE,
+                        from_node=src,
+                        to_node=dst,
+                        payload=c,
+                    ))
             elif c.node_type_from == "GS" or c.node_type_to == "GS":
                 gs = c.from_node if c.node_type_from == "GS" else c.to_node
                 sat = c.to_node if c.node_type_from == "GS" else c.from_node
+                # To satellite: satellite handles upload and active-GS tracking.
                 self.schedule(SimEvent(
                     time=c.start_time_sec,
                     event_type=EventType.GS_CONTACT_START,
@@ -199,5 +228,21 @@ class EventLoop:
                     event_type=EventType.GS_CONTACT_END,
                     from_node=gs,
                     to_node=sat,
+                    payload=c,
+                ))
+                # To GS (from_node=sat so the GS knows which satellite it's in contact with).
+                # GS uses these to deliver queued notifications and poll Fabric.
+                self.schedule(SimEvent(
+                    time=c.start_time_sec,
+                    event_type=EventType.GS_CONTACT_START,
+                    from_node=sat,
+                    to_node=gs,
+                    payload=c,
+                ))
+                self.schedule(SimEvent(
+                    time=c.end_time_sec,
+                    event_type=EventType.GS_CONTACT_END,
+                    from_node=sat,
+                    to_node=gs,
                     payload=c,
                 ))

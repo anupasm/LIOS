@@ -1,0 +1,127 @@
+{
+  "$schema": "https://github.com/hyperledger-labs/fablo/releases/download/1.2.0/schema.json",
+  "global": {
+    "fabricVersion": "2.5.15",
+    "tls": true,
+    "tools": {
+      "explorer": true
+    }
+  },
+  "orgs": [
+    {
+      "organization": {
+        "name": "Orderer",
+        "domain": "orderer.lios.example.com"
+      },
+      "orderers": [
+        {
+          "groupName": "orderer-group",
+          "prefix": "orderer",
+          "type": "raft",
+          "instances": 3
+        }
+      ]
+    },
+    {
+      "organization": {
+        "name": "Op1",
+        "mspName": "Op1MSP",
+        "domain": "op1.lios.example.com"
+      },
+      "ca": {
+        "prefix": "ca"
+      },
+      "peer": {
+        "instances": 2,
+        "db": "CouchDb"
+      }
+    },
+    {
+      "organization": {
+        "name": "Op2",
+        "mspName": "Op2MSP",
+        "domain": "op2.lios.example.com"
+      },
+      "ca": {
+        "prefix": "ca"
+      },
+      "peer": {
+        "instances": 2,
+        "db": "CouchDb"
+      }
+    },
+    {
+      "organization": {
+        "name": "Op3",
+        "mspName": "Op3MSP",
+        "domain": "op3.lios.example.com"
+      },
+      "ca": {
+        "prefix": "ca"
+      },
+      "peer": {
+        "instances": 2,
+        "db": "CouchDb"
+      }
+    },
+    {
+      "organization": {
+        "name": "Op4",
+        "mspName": "Op4MSP",
+        "domain": "op4.lios.example.com"
+      },
+      "ca": {
+        "prefix": "ca"
+      },
+      "peer": {
+        "instances": 2,
+        "db": "CouchDb"
+      }
+    }
+  ],
+  "channels": [
+    {
+      "name": "isl-settlement",
+      "orgs": [
+        {
+          "name": "Op1",
+          "peers": [
+            "peer0",
+            "peer1"
+          ]
+        },
+        {
+          "name": "Op2",
+          "peers": [
+            "peer0",
+            "peer1"
+          ]
+        },
+        {
+          "name": "Op3",
+          "peers": [
+            "peer0",
+            "peer1"
+          ]
+        },
+        {
+          "name": "Op4",
+          "peers": [
+            "peer0",
+            "peer1"
+          ]
+        }
+      ]
+    }
+  ],
+  "chaincodes": [
+    {
+      "name": "isl-settlement",
+      "version": "1.0",
+      "lang": "golang",
+      "channel": "isl-settlement",
+      "directory": "../../chaincode/isl_settlement",
+      "endorsement": "AND('Op1MSP.member','Op2MSP.member','Op3MSP.member','Op4MSP.member')"
+    }
+  ]
+}

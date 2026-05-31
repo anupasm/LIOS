@@ -83,10 +83,10 @@ class TestOffChainProtocol:
         result = self.proto_a.record_forwarding(CHANNEL_ID, 10.0, self.pub_b, 1.0, b"s" * 72)
         assert result is None
 
-    def test_hash_chain_grows(self):
+    def test_forwarding_log_grows(self):
         self.proto_a.record_forwarding(CHANNEL_ID, 10.0, self.pub_b, 0.0, b"s" * 72)
         ch = self.proto_a.get_channel(CHANNEL_ID)
-        assert ch.hash_chain.length() == 1
+        assert ch.forwarding_log.length() == 1
 
     def test_t1_trigger_fires_when_low(self):
         threshold = BALANCE_KB * T_LOW_FRACTION * 0.5
