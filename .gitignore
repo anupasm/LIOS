@@ -7,10 +7,7 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 
-# Results and logs
-results/figures/
-results/logs/
-results/*.png
+
 
 # LaTeX build artifacts
 taes/*.aux
@@ -20,3 +17,11 @@ taes/*.log
 taes/*.out
 taes/*.pdf
 taes/*.synctex.gz
+
+lios/blockchain/fablo/fablo-target/*
+lios/chaincode/isl_settlement/vendor/*
+
+lios/data*/*
+lios/results*/*
+results*/*
+taes/*
