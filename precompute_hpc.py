@@ -155,7 +155,7 @@ def compute_contact_plan(
           f"(step={step}s, range={isl_range:.0f}km, workers={workers})")
 
     t_end = EPOCH + timedelta(seconds=DURATION_SEC)
-    calc  = WindowCalculator(EPOCH, t_end, step, isl_range)
+    calc  = WindowCalculator(EPOCH, t_end, step, isl_range, checkpoint_dir=cache)
     t0    = time.perf_counter()
     cp    = calc.compute(operators_tles, ground_stations, n_workers=workers)
     elapsed = time.perf_counter() - t0
