@@ -16,7 +16,6 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from multiprocessing import Pool
-from multiprocessing.shared_memory import SharedMemory
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -307,24 +306,10 @@ _WORKER_POS_ARR: Optional[np.ndarray] = None   # shape (n_sats, steps, 3)
 _WORKER_TS_ARR:  Optional[np.ndarray] = None   # shape (steps,)
 
 
-def _init_isl_worker(
-    pos_shm_name: str, pos_shape: tuple, pos_dtype: str,
-    ts_shm_name: str,  ts_shape: tuple,  ts_dtype: str,
-) -> None:
-    """Attach to shared-memory pos_arr/ts_arr — zero copies per worker process."""
+def _init_isl_worker(pos_arr: np.ndarray, ts_arr: np.ndarray) -> None:
     global _WORKER_POS_ARR, _WORKER_TS_ARR
-    shm_pos = SharedMemory(name=pos_shm_name, create=False)
-    shm_ts  = SharedMemory(name=ts_shm_name,  create=False)
-    # Prevent resource_tracker in each worker from unlinking on exit;
-    # the main process owns the SHM lifecycle.
-    try:
-        import multiprocessing.resource_tracker as _rt
-        _rt.unregister(f"/{pos_shm_name}", "shared_memory")
-        _rt.unregister(f"/{ts_shm_name}",  "shared_memory")
-    except Exception:
-        pass
-    _WORKER_POS_ARR = np.ndarray(pos_shape, dtype=np.dtype(pos_dtype), buffer=shm_pos.buf)
-    _WORKER_TS_ARR  = np.ndarray(ts_shape,  dtype=np.dtype(ts_dtype),  buffer=shm_ts.buf)
+    _WORKER_POS_ARR = pos_arr
+    _WORKER_TS_ARR  = ts_arr
 
 
 def _isl_pair_worker(args: tuple) -> List[dict]:
@@ -512,9 +497,12 @@ class WindowCalculator:
         # Only pairs that are ever within isl_max_range_km at a sampled timestep
         # can produce contacts. For LEO constellations this is typically 1-5% of
         # the O(n²) set, cutting Phase 2 from hours to minutes.
+        # A numpy boolean matrix (n_sats × n_sats) gives O(1) deduplication without
+        # building a Python set of 11M+ tuples (which would need an expensive sort
+        # before dispatch and ~1 GB of object overhead).
         ts_np = np.array(ts_arr, dtype=np.float64)
         n_pairs_max = n_sats * (n_sats - 1) // 2
-        candidate_pairs: set = set()
+        candidate_matrix = np.zeros((n_sats, n_sats), dtype=bool)  # upper-triangle only
         print(f"    Phase 1.5/3 spatial index: {steps} steps, "
               f"{n_pairs_max:,} O(n²) pairs ...", flush=True)
         t0_cand = time.perf_counter()
@@ -532,80 +520,70 @@ class WindowCalculator:
                 gj = valid_idx[step_pairs[:, 1]]
                 lo = np.minimum(gi, gj)
                 hi = np.maximum(gi, gj)
-                candidate_pairs.update(zip(lo.tolist(), hi.tolist()))
+                candidate_matrix[lo, hi] = True
             now = time.perf_counter()
             if step_idx == steps - 1 or now - _last_print_cand >= 30:
                 pct = (step_idx + 1) * 100 // steps
                 elapsed = now - t0_cand
+                n_cand = int(candidate_matrix.sum())
                 print(
                     f"    Phase 1.5/3 spatial index: {pct:3d}%  "
                     f"({step_idx + 1}/{steps} steps, "
-                    f"{len(candidate_pairs):,} candidate pairs, {elapsed:.1f}s)   ",
+                    f"{n_cand:,} candidate pairs, {elapsed:.1f}s)   ",
                     end="\r", flush=True,
                 )
                 _last_print_cand = now
         elapsed_cand = time.perf_counter() - t0_cand
-        total_isl = len(candidate_pairs)
+        i_arr, j_arr = np.where(candidate_matrix)
+        total_isl = len(i_arr)
         print(
             f"    Phase 1.5/3 spatial index: done  "
             f"{total_isl:,} / {n_pairs_max:,} candidate pairs in {elapsed_cand:.1f}s "
             f"({100.0 * total_isl / max(1, n_pairs_max):.2f}% of O(n²))"
         )
+        del candidate_matrix  # free 64 MB before spawning workers
 
         # ── Phase 2: Parallel ISL pair processing ──────────────────────────────
-        # pos_arr is placed in shared memory so all 47 workers map it once —
-        # no 277 MB pickle per process on spawn.
         raw_contacts: List[dict] = []
         if total_isl > 0:
             print(f"    Phase 2/3 ISL pairs:   {total_isl:,} pairs, {workers} workers", flush=True)
 
-            shm_pos = SharedMemory(create=True, size=pos_arr.nbytes)
-            shm_ts  = SharedMemory(create=True, size=ts_np.nbytes)
-            try:
-                np.copyto(np.ndarray(pos_arr.shape, dtype=pos_arr.dtype, buffer=shm_pos.buf), pos_arr)
-                np.copyto(np.ndarray(ts_np.shape,   dtype=ts_np.dtype,   buffer=shm_ts.buf),  ts_np)
+            def _isl_args_gen():
+                for k in range(total_isl):
+                    i, j = int(i_arr[k]), int(j_arr[k])
+                    yield (i, j,
+                           all_sats[i].sat_id, all_sats[j].sat_id,
+                           all_sats[i].operator_id, all_sats[j].operator_id,
+                           self.isl_max_range_km)
 
-                isl_args = (
-                    (i, j,
-                     all_sats[i].sat_id, all_sats[j].sat_id,
-                     all_sats[i].operator_id, all_sats[j].operator_id,
-                     self.isl_max_range_km)
-                    for (i, j) in sorted(candidate_pairs)
-                )
-                done_isl = 0
-                t0_isl = time.perf_counter()
-                _last_print = t0_isl - 30
-                chunksize = max(1, min(500, total_isl // (workers * 40)))
-                with Pool(
-                    processes=min(workers, total_isl),
-                    initializer=_init_isl_worker,
-                    initargs=(
-                        shm_pos.name, pos_arr.shape, pos_arr.dtype.str,
-                        shm_ts.name,  ts_np.shape,   ts_np.dtype.str,
-                    ),
-                ) as pool:
-                    for pair_contacts in pool.imap_unordered(
-                        _isl_pair_worker, isl_args, chunksize=chunksize
-                    ):
-                        raw_contacts.extend(pair_contacts)
-                        done_isl += 1
-                        now = time.perf_counter()
-                        if done_isl == total_isl or now - _last_print >= 30:
-                            pct = done_isl * 100 // total_isl
-                            elapsed = now - t0_isl
-                            rate = done_isl / max(elapsed, 1e-6)
-                            suffix = " done" if done_isl == total_isl else ""
-                            print(
-                                f"    Phase 2/3 ISL pairs:   {pct:3d}%  "
-                                f"({done_isl:,}/{total_isl:,} pairs, "
-                                f"{len(raw_contacts):,} contacts, "
-                                f"{elapsed:.1f}s, {rate:.0f} pairs/s){suffix}",
-                                flush=True,
-                            )
-                            _last_print = now
-            finally:
-                shm_pos.close(); shm_pos.unlink()
-                shm_ts.close();  shm_ts.unlink()
+            done_isl = 0
+            t0_isl = time.perf_counter()
+            _last_print = t0_isl - 30
+            chunksize = max(1, min(500, total_isl // (workers * 40)))
+            with Pool(
+                processes=min(workers, total_isl),
+                initializer=_init_isl_worker,
+                initargs=(pos_arr, ts_np),
+            ) as pool:
+                for pair_contacts in pool.imap_unordered(
+                    _isl_pair_worker, _isl_args_gen(), chunksize=chunksize
+                ):
+                    raw_contacts.extend(pair_contacts)
+                    done_isl += 1
+                    now = time.perf_counter()
+                    if done_isl == total_isl or now - _last_print >= 30:
+                        pct = done_isl * 100 // total_isl
+                        elapsed = now - t0_isl
+                        rate = done_isl / max(elapsed, 1e-6)
+                        suffix = " done" if done_isl == total_isl else ""
+                        print(
+                            f"    Phase 2/3 ISL pairs:   {pct:3d}%  "
+                            f"({done_isl:,}/{total_isl:,} pairs, "
+                            f"{len(raw_contacts):,} contacts, "
+                            f"{elapsed:.1f}s, {rate:.0f} pairs/s){suffix}",
+                            flush=True,
+                        )
+                        _last_print = now
 
         # ── Phase 3: Parallel GS-sat processing ───────────────────────────────
         gs_args = [
