@@ -12,13 +12,16 @@ import csv
 import json
 import math
 import os
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from multiprocessing import Pool
+from multiprocessing.shared_memory import SharedMemory
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
+from scipy.spatial import cKDTree
 from sgp4.api import jday
 
 from config import cfg
@@ -300,48 +303,64 @@ def _elevation_deg(gs_eci: np.ndarray, sat_eci: np.ndarray, gs_lat_rad: float, g
 
 # ── multiprocessing worker functions (module-level required for pickling) ──────
 
+_WORKER_POS_ARR: Optional[np.ndarray] = None   # shape (n_sats, steps, 3)
+_WORKER_TS_ARR:  Optional[np.ndarray] = None   # shape (steps,)
+
+
+def _init_isl_worker(
+    pos_shm_name: str, pos_shape: tuple, pos_dtype: str,
+    ts_shm_name: str,  ts_shape: tuple,  ts_dtype: str,
+) -> None:
+    """Attach to shared-memory pos_arr/ts_arr — zero copies per worker process."""
+    global _WORKER_POS_ARR, _WORKER_TS_ARR
+    shm_pos = SharedMemory(name=pos_shm_name, create=False)
+    shm_ts  = SharedMemory(name=ts_shm_name,  create=False)
+    # Prevent resource_tracker in each worker from unlinking on exit;
+    # the main process owns the SHM lifecycle.
+    try:
+        import multiprocessing.resource_tracker as _rt
+        _rt.unregister(f"/{pos_shm_name}", "shared_memory")
+        _rt.unregister(f"/{ts_shm_name}",  "shared_memory")
+    except Exception:
+        pass
+    _WORKER_POS_ARR = np.ndarray(pos_shape, dtype=np.dtype(pos_dtype), buffer=shm_pos.buf)
+    _WORKER_TS_ARR  = np.ndarray(ts_shape,  dtype=np.dtype(ts_dtype),  buffer=shm_ts.buf)
+
+
 def _isl_pair_worker(args: tuple) -> List[dict]:
-    pos_i, pos_j, ts_arr, from_id, to_id, from_op, to_op, isl_max_range_km = args
+    """Vectorised ISL-pair contact detector.
+
+    Reads positions from the process-global _WORKER_POS_ARR so no position
+    data is pickled per task — only 2 indices + a handful of scalars.
+    """
+    i, j, from_id, to_id, from_op, to_op, isl_max_range_km = args
+    pos_i = _WORKER_POS_ARR[i]   # (steps, 3) — NaN where propagation failed
+    pos_j = _WORKER_POS_ARR[j]
+    ts    = _WORKER_TS_ARR        # (steps,)
+
+    # Valid steps: both satellites propagated successfully
+    valid = ~(np.isnan(pos_i[:, 0]) | np.isnan(pos_j[:, 0]))
+    # Vectorised distance — np.inf for invalid steps so they never trigger
+    diff_xyz = pos_i - pos_j
+    dists = np.where(valid, np.linalg.norm(diff_xyz, axis=1), np.inf)
+    in_range = valid & (dists < isl_max_range_km)
+
+    # Edge-detect contact boundaries
+    bordered = np.concatenate(([0], in_range.astype(np.int8), [0]))
+    delta = np.diff(bordered)
+    starts_idx = np.where(delta == 1)[0]   # first in-range step
+    ends_idx   = np.where(delta == -1)[0]  # first out-of-range step
+
     contacts: List[dict] = []
-    in_contact = False
-    contact_start = 0.0
-    ranges_in_contact: List[float] = []
-
-    for step_idx, t_sec in enumerate(ts_arr):
-        pi = pos_i[step_idx]
-        pj = pos_j[step_idx]
-        if pi is None or pj is None:
-            in_contact = False
-            continue
-        dist = float(np.linalg.norm(pi - pj))
-        if dist < isl_max_range_km:
-            if not in_contact:
-                in_contact = True
-                contact_start = t_sec
-                ranges_in_contact = [dist]
-            else:
-                ranges_in_contact.append(dist)
-        else:
-            if in_contact:
-                contact_end = ts_arr[step_idx - 1] if step_idx > 0 else t_sec
-                mean_range = float(np.mean(ranges_in_contact))
-                frac = 1.0 - mean_range / isl_max_range_km
-                contacts.append(dict(
-                    from_node=from_id, to_node=to_id,
-                    start_time_sec=contact_start, end_time_sec=contact_end,
-                    capacity_kbps=C_MAX_ISL_KBPS * max(0.0, frac), range_km=mean_range,
-                    node_type_from="SAT", node_type_to="SAT",
-                    operator_from=from_op, operator_to=to_op,
-                ))
-                in_contact = False
-
-    if in_contact:
-        mean_range = float(np.mean(ranges_in_contact))
-        frac = 1.0 - mean_range / isl_max_range_km
+    for s, e in zip(starts_idx, ends_idx):
+        mean_range = float(np.mean(dists[s:e]))
+        frac = max(0.0, 1.0 - mean_range / isl_max_range_km)
         contacts.append(dict(
             from_node=from_id, to_node=to_id,
-            start_time_sec=contact_start, end_time_sec=ts_arr[-1],
-            capacity_kbps=C_MAX_ISL_KBPS * max(0.0, frac), range_km=mean_range,
+            start_time_sec=float(ts[s]),
+            end_time_sec=float(ts[e - 1]),
+            capacity_kbps=C_MAX_ISL_KBPS * frac,
+            range_km=mean_range,
             node_type_from="SAT", node_type_to="SAT",
             operator_from=from_op, operator_to=to_op,
         ))
@@ -447,37 +466,146 @@ class WindowCalculator:
         n_sats = len(all_sats)
         workers = n_workers or os.cpu_count() or 1
 
-        # ── Phase 1: Serial satellite propagation (Satrec is not picklable) ───
+        # ── Phase 1: Vectorised per-satellite SGP4 propagation ───────────────
+        # sgp4 2.x accepts numpy arrays of (jd, fr) and returns position arrays,
+        # replacing the previous O(n_sats × steps) Python scalar loop.
+        pos_arr   = np.full((n_sats, steps, 3), np.nan, dtype=np.float64)
         positions: List[List[Optional[np.ndarray]]] = [[None] * steps for _ in range(n_sats)]
         _geo: List[List[Optional[Tuple[float, float, float]]]] = (
             [[None] * steps for _ in range(n_sats)] if _logging else []
         )
-        for step_idx, t_sec in enumerate(ts_arr):
-            delta_days = t_sec / 86400.0
-            fr_step = epoch_fr + delta_days
-            jd_step = epoch_jd + math.floor(fr_step)
-            fr_step = fr_step - math.floor(fr_step)
+
+        # Pre-compute JD/FR arrays once for all timesteps
+        _deltas = np.array(ts_arr, dtype=np.float64) / 86400.0
+        _fr_combined = epoch_fr + _deltas
+        _jd_int = np.floor(_fr_combined)
+        jd_all = (epoch_jd + _jd_int).astype(np.float64)
+        fr_all = (_fr_combined - _jd_int).astype(np.float64)
+
+        # Satrec.sgp4 only accepts scalar (float) jd/fr — use precomputed arrays
+        # for the JD/FR values but call it once per (sat, step).
+        print(f"    Phase 1/3 propagation: {n_sats} sats × {steps} steps", flush=True)
+        t0_p1 = time.perf_counter()
+        _last_print_p1 = t0_p1 - 30
+        for step_idx in range(steps):
+            jd_step = float(jd_all[step_idx])
+            fr_step = float(fr_all[step_idx])
             gmst = _gmst(jd_step, fr_step) if _logging else 0.0
             for si, sat in enumerate(all_sats):
                 pos = _eci_position_km(sat, jd_step, fr_step)
                 positions[si][step_idx] = pos
+                if pos is not None:
+                    pos_arr[si, step_idx] = pos
                 if _logging and pos is not None:
                     _geo[si][step_idx] = _eci_to_geodetic(pos, gmst)
+            now = time.perf_counter()
+            if step_idx == steps - 1 or now - _last_print_p1 >= 30:
+                pct = (step_idx + 1) * 100 // steps
+                elapsed = now - t0_p1
+                print(f"    Phase 1/3 propagation: {pct:3d}%  "
+                      f"({step_idx + 1}/{steps} steps, {elapsed:.1f}s)   ",
+                      end="\r", flush=True)
+                _last_print_p1 = now
+        print(f"    Phase 1/3 propagation: 100%  ({steps}/{steps} steps) done")
+
+        # ── Phase 1.5: Spatial candidate-pair pruning via cKDTree ────────────
+        # Only pairs that are ever within isl_max_range_km at a sampled timestep
+        # can produce contacts. For LEO constellations this is typically 1-5% of
+        # the O(n²) set, cutting Phase 2 from hours to minutes.
+        ts_np = np.array(ts_arr, dtype=np.float64)
+        n_pairs_max = n_sats * (n_sats - 1) // 2
+        candidate_pairs: set = set()
+        print(f"    Phase 1.5/3 spatial index: {steps} steps, "
+              f"{n_pairs_max:,} O(n²) pairs ...", flush=True)
+        t0_cand = time.perf_counter()
+        _last_print_cand = t0_cand - 30
+        for step_idx in range(steps):
+            valid_mask = ~np.isnan(pos_arr[:, step_idx, 0])
+            valid_idx = np.where(valid_mask)[0]
+            if len(valid_idx) < 2:
+                continue
+            pts = pos_arr[valid_idx, step_idx, :]
+            tree = cKDTree(pts)
+            step_pairs = tree.query_pairs(self.isl_max_range_km, output_type="ndarray")
+            if len(step_pairs):
+                gi = valid_idx[step_pairs[:, 0]]
+                gj = valid_idx[step_pairs[:, 1]]
+                lo = np.minimum(gi, gj)
+                hi = np.maximum(gi, gj)
+                candidate_pairs.update(zip(lo.tolist(), hi.tolist()))
+            now = time.perf_counter()
+            if step_idx == steps - 1 or now - _last_print_cand >= 30:
+                pct = (step_idx + 1) * 100 // steps
+                elapsed = now - t0_cand
+                print(
+                    f"    Phase 1.5/3 spatial index: {pct:3d}%  "
+                    f"({step_idx + 1}/{steps} steps, "
+                    f"{len(candidate_pairs):,} candidate pairs, {elapsed:.1f}s)   ",
+                    end="\r", flush=True,
+                )
+                _last_print_cand = now
+        elapsed_cand = time.perf_counter() - t0_cand
+        total_isl = len(candidate_pairs)
+        print(
+            f"    Phase 1.5/3 spatial index: done  "
+            f"{total_isl:,} / {n_pairs_max:,} candidate pairs in {elapsed_cand:.1f}s "
+            f"({100.0 * total_isl / max(1, n_pairs_max):.2f}% of O(n²))"
+        )
 
         # ── Phase 2: Parallel ISL pair processing ──────────────────────────────
-        isl_args = [
-            (positions[i], positions[j], ts_arr,
-             all_sats[i].sat_id, all_sats[j].sat_id,
-             all_sats[i].operator_id, all_sats[j].operator_id,
-             self.isl_max_range_km)
-            for i in range(n_sats)
-            for j in range(i + 1, n_sats)
-        ]
+        # pos_arr is placed in shared memory so all 47 workers map it once —
+        # no 277 MB pickle per process on spawn.
         raw_contacts: List[dict] = []
-        if isl_args:
-            with Pool(processes=min(workers, len(isl_args))) as pool:
-                for pair_contacts in pool.map(_isl_pair_worker, isl_args):
-                    raw_contacts.extend(pair_contacts)
+        if total_isl > 0:
+            print(f"    Phase 2/3 ISL pairs:   {total_isl:,} pairs, {workers} workers", flush=True)
+
+            shm_pos = SharedMemory(create=True, size=pos_arr.nbytes)
+            shm_ts  = SharedMemory(create=True, size=ts_np.nbytes)
+            try:
+                np.copyto(np.ndarray(pos_arr.shape, dtype=pos_arr.dtype, buffer=shm_pos.buf), pos_arr)
+                np.copyto(np.ndarray(ts_np.shape,   dtype=ts_np.dtype,   buffer=shm_ts.buf),  ts_np)
+
+                isl_args = (
+                    (i, j,
+                     all_sats[i].sat_id, all_sats[j].sat_id,
+                     all_sats[i].operator_id, all_sats[j].operator_id,
+                     self.isl_max_range_km)
+                    for (i, j) in sorted(candidate_pairs)
+                )
+                done_isl = 0
+                t0_isl = time.perf_counter()
+                _last_print = t0_isl - 30
+                chunksize = max(1, min(500, total_isl // (workers * 40)))
+                with Pool(
+                    processes=min(workers, total_isl),
+                    initializer=_init_isl_worker,
+                    initargs=(
+                        shm_pos.name, pos_arr.shape, pos_arr.dtype.str,
+                        shm_ts.name,  ts_np.shape,   ts_np.dtype.str,
+                    ),
+                ) as pool:
+                    for pair_contacts in pool.imap_unordered(
+                        _isl_pair_worker, isl_args, chunksize=chunksize
+                    ):
+                        raw_contacts.extend(pair_contacts)
+                        done_isl += 1
+                        now = time.perf_counter()
+                        if done_isl == total_isl or now - _last_print >= 30:
+                            pct = done_isl * 100 // total_isl
+                            elapsed = now - t0_isl
+                            rate = done_isl / max(elapsed, 1e-6)
+                            suffix = " done" if done_isl == total_isl else ""
+                            print(
+                                f"    Phase 2/3 ISL pairs:   {pct:3d}%  "
+                                f"({done_isl:,}/{total_isl:,} pairs, "
+                                f"{len(raw_contacts):,} contacts, "
+                                f"{elapsed:.1f}s, {rate:.0f} pairs/s){suffix}",
+                                flush=True,
+                            )
+                            _last_print = now
+            finally:
+                shm_pos.close(); shm_pos.unlink()
+                shm_ts.close();  shm_ts.unlink()
 
         # ── Phase 3: Parallel GS-sat processing ───────────────────────────────
         gs_args = [
@@ -488,9 +616,21 @@ class WindowCalculator:
             for si, sat in enumerate(all_sats)
         ]
         if gs_args:
-            with Pool(processes=min(workers, len(gs_args))) as pool:
-                for gs_contacts in pool.map(_gs_sat_worker, gs_args):
+            total_gs = len(gs_args)
+            n_isl = len(raw_contacts)
+            print(f"    Phase 3/3 GS-sat:      {total_gs} pairs, {workers} workers", flush=True)
+            done_gs = 0
+            with Pool(processes=min(workers, total_gs)) as pool:
+                for gs_contacts in pool.imap_unordered(_gs_sat_worker, gs_args, chunksize=max(1, total_gs // (workers * 4))):
                     raw_contacts.extend(gs_contacts)
+                    done_gs += 1
+                    pct = done_gs * 100 // total_gs
+                    print(f"    Phase 3/3 GS-sat:      {pct:3d}%  "
+                          f"({done_gs}/{total_gs} pairs, "
+                          f"{len(raw_contacts) - n_isl} contacts)   ",
+                          end="\r", flush=True)
+            print(f"    Phase 3/3 GS-sat:      100%  ({total_gs}/{total_gs} pairs, "
+                  f"{len(raw_contacts) - n_isl} contacts) done")
 
         # Assign stable contact IDs after sorting
         raw_contacts.sort(key=lambda c: c["start_time_sec"])

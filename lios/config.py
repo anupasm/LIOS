@@ -23,7 +23,16 @@ Usage::
 from __future__ import annotations
 
 import os
-import tomllib
+import sys
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python < 3.11
+    try:
+        import tomli as tomllib  # type: ignore[no-redef]
+    except ModuleNotFoundError as exc:
+        raise ModuleNotFoundError(
+            "tomllib (Python 3.11+) or tomli (pip install tomli) is required"
+        ) from exc
 from dataclasses import dataclass
 from pathlib import Path
 

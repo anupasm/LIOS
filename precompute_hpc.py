@@ -31,6 +31,18 @@ import os
 import sys
 import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
+
+# Prevent BLAS/OpenBLAS from spawning extra threads inside each worker
+# process — parallelism is handled at the process level already.
+for _blas_var in (
+    "OMP_NUM_THREADS",
+    "OPENBLAS_NUM_THREADS",
+    "MKL_NUM_THREADS",
+    "BLAS_NUM_THREADS",
+    "VECLIB_MAXIMUM_THREADS",
+    "NUMEXPR_NUM_THREADS",
+):
+    os.environ.setdefault(_blas_var, "1")
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -169,6 +181,10 @@ def _route_chunk_worker(args: tuple) -> List[Tuple[str, Optional[dict]]]:
     Returns list of (key, path_dict|None) for each triple in the chunk.
     """
     cp_csv, epoch_iso, sat_op_map, chunk = args
+
+    for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
+               "BLAS_NUM_THREADS", "VECLIB_MAXIMUM_THREADS", "NUMEXPR_NUM_THREADS"):
+        os.environ.setdefault(_v, "1")
 
     lios_dir = str(Path(__file__).parent / "lios")
     if lios_dir not in sys.path:
@@ -312,6 +328,10 @@ def _traffic_chunk_worker(args: tuple) -> List[dict]:
     """
     cp_csv, epoch_iso, sat_op_map, rt_path_str, arrival_rate, seed, windows = args
 
+    for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
+               "BLAS_NUM_THREADS", "VECLIB_MAXIMUM_THREADS", "NUMEXPR_NUM_THREADS"):
+        os.environ.setdefault(_v, "1")
+
     lios_dir = str(Path(__file__).parent / "lios")
     if lios_dir not in sys.path:
         sys.path.insert(0, lios_dir)
@@ -386,7 +406,7 @@ def compute_traffic_schedule(
           f"{len(windows)} ISL windows, {total_active_h:.1f}h active time")
 
     # Distribute windows across workers round-robin for load balance
-    n_workers = min(workers, max(1, len(windows)))
+    n_workers = min(20,workers, max(1, len(windows)))
     chunks: List[List[Tuple[float, float]]] = [[] for _ in range(n_workers)]
     for i, w in enumerate(windows):
         chunks[i % n_workers].append(w)
@@ -428,8 +448,8 @@ def _parse_args() -> argparse.Namespace:
                    help="Data directory containing tles/ and gss/ subdirs")
     p.add_argument("--cache",  default=str(_LIOS_DIR / "cache"),
                    help="Output cache directory")
-    p.add_argument("--workers", type=int, default=os.cpu_count() or 1,
-                   help="Number of parallel worker processes (default: all CPUs)")
+    p.add_argument("--workers", type=int, default=32,
+                   help="Number of parallel worker processes (default: 32)")
     p.add_argument("--step",    type=int,   default=cfg.simulation.time_step_sec,
                    help="Contact plan time step in seconds")
     p.add_argument("--range",   type=float, default=cfg.link.isl_max_range_km,
