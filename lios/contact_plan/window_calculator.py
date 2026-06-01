@@ -437,7 +437,7 @@ class WindowCalculator:
             return None
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
         stem = f"step{self.time_step_sec}_range{self.isl_max_range_km:.0f}"
-        return self.checkpoint_dir / f"ckpt_{name}_{stem}"
+        return self.checkpoint_dir / f"ckpt_{stem}_{name}"
 
     def compute(
         self,
@@ -467,6 +467,7 @@ class WindowCalculator:
         ckpt_p1  = self._ckpt("pos.npy")
         ckpt_p15 = self._ckpt("candidates.npz")
         ckpt_p2  = self._ckpt("isl_contacts.csv")
+        ckpt_p3  = self._ckpt("all_contacts.csv")
 
         _geo: List[List[Optional[Tuple[float, float, float]]]] = (
             [[None] * steps for _ in range(n_sats)] if _logging else []
@@ -634,7 +635,22 @@ class WindowCalculator:
 
         # ── Phase 3: Parallel GS-sat processing ──────────────────────────────
         total_gs = len(all_gs) * n_sats
-        if total_gs > 0:
+        if ckpt_p3 and ckpt_p3.exists():
+            print(f"  [ckpt] Phase 3: loading {ckpt_p3.name} ...", flush=True)
+            _all_cp = ContactPlan.from_csv(ckpt_p3, self.t_start)
+            raw_contacts = [
+                dict(
+                    from_node=c.from_node, to_node=c.to_node,
+                    start_time_sec=c.start_time_sec, end_time_sec=c.end_time_sec,
+                    capacity_kbps=c.capacity_kbps, range_km=c.range_km,
+                    node_type_from=c.node_type_from, node_type_to=c.node_type_to,
+                    operator_from=c.operator_from, operator_to=c.operator_to,
+                )
+                for c in _all_cp.contacts
+            ]
+            print(f"  [ckpt] Phase 3: loaded  {len(raw_contacts):,} total contacts "
+                  f"(ISL + GS)")
+        elif total_gs > 0:
             n_isl = len(raw_contacts)
             print(f"    Phase 3/3 GS-sat:      {total_gs:,} pairs, {workers} workers",
                   flush=True)
@@ -674,6 +690,14 @@ class WindowCalculator:
                             flush=True,
                         )
                         _last_print_gs = now
+
+            if ckpt_p3:
+                _all_cp = ContactPlan(epoch=self.t_start)
+                for idx, c_dict in enumerate(raw_contacts, 1):
+                    _all_cp.contacts.append(Contact(contact_id=f"C{idx:06d}", **c_dict))
+                _all_cp.to_csv(ckpt_p3)
+                print(f"  [ckpt] Phase 3 saved → {ckpt_p3.name}  "
+                      f"({len(raw_contacts):,} total contacts)")
 
         # Assign stable contact IDs after sorting
         raw_contacts.sort(key=lambda c: c["start_time_sec"])
