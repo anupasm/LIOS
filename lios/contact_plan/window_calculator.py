@@ -443,6 +443,15 @@ class WindowCalculator:
         _logging = self.propagation_log_path is not None
         n_sats  = len(all_sats)
         workers = n_workers or os.cpu_count() or 1
+        t_compute_start = time.perf_counter()
+
+        duration_h = duration_sec / 3600
+        op_summary = ", ".join(f"{op}:{len(sats)}" for op, sats in sorted(operators.items()))
+        print(f"  WindowCalculator: epoch={self.t_start.strftime('%Y-%m-%dT%H:%M:%SZ')}, "
+              f"duration={duration_h:.1f}h, step={self.time_step_sec}s, "
+              f"range={self.isl_max_range_km:.0f}km")
+        print(f"  WindowCalculator: {n_sats} sats ({len(operators)} ops: {op_summary}), "
+              f"{len(all_gs)} GS, {steps} steps, {workers} workers")
 
         ckpt_p1  = self._ckpt("pos.npy")
         ckpt_p15 = self._ckpt("candidates.npz")
@@ -468,7 +477,9 @@ class WindowCalculator:
                   f"({pos_arr.nbytes // 1024 // 1024} MB)")
         else:
             pos_arr = np.full((n_sats, steps, 3), np.nan, dtype=np.float64)
-            print(f"    Phase 1/3 propagation: {n_sats} sats × {steps} steps", flush=True)
+            mem_mb = pos_arr.nbytes // 1024 // 1024
+            print(f"    Phase 1/3 propagation: {n_sats} sats × {steps} steps "
+                  f"(pos_arr: {mem_mb} MB allocated)", flush=True)
             t0 = time.perf_counter()
             _last = t0 - 30
             for step_idx in range(steps):
@@ -487,7 +498,8 @@ class WindowCalculator:
                           f"({step_idx+1}/{steps} steps, {now-t0:.1f}s)   ",
                           end="\r", flush=True)
                     _last = now
-            print(f"    Phase 1/3 propagation: 100%  ({steps}/{steps} steps) done")
+            elapsed_p1 = time.perf_counter() - t0
+            print(f"    Phase 1/3 propagation: done  ({steps} steps, {n_sats} sats, {elapsed_p1:.1f}s)")
             if ckpt_p1:
                 np.save(str(ckpt_p1), pos_arr)
                 print(f"  [ckpt] Phase 1 saved → {ckpt_p1.name}  "
@@ -653,5 +665,11 @@ class WindowCalculator:
             _write_propagation_log(
                 self.propagation_log_path, cp, all_sats, all_gs, ts_arr, _geo
             )
+
+        n_isl_c = sum(1 for c in cp.contacts if c.node_type_from == "SAT" and c.node_type_to == "SAT")
+        n_gs_c  = len(cp.contacts) - n_isl_c
+        elapsed_compute = time.perf_counter() - t_compute_start
+        print(f"  WindowCalculator done: {len(cp.contacts):,} contacts "
+              f"({n_isl_c:,} ISL, {n_gs_c:,} GS-sat) in {elapsed_compute:.1f}s total")
 
         return cp

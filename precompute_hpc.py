@@ -64,6 +64,10 @@ MIN_CONTACT_DURATION_SEC = 600
 ROUTE_BUCKET_SEC = 300  # 5-min buckets matching TrafficGenerator._route_bucket_sec
 
 
+def _ts() -> str:
+    return datetime.now(timezone.utc).strftime("%H:%M:%S")
+
+
 # ── Cache paths ───────────────────────────────────────────────────────────────
 
 def _cp_path(cache: Path, step: int, rng: float) -> Path:
@@ -144,14 +148,16 @@ def compute_contact_plan(
     meta_file = _cp_meta_path(cache, step, isl_range)
 
     if not force and cp_file.exists() and meta_file.exists():
-        print(f"  [cached] contact plan: {cp_file.name}")
+        print(f"  [{_ts()}] [cached] contact plan: {cp_file.name}")
         cp = ContactPlan.from_csv(cp_file, EPOCH)
-        print(f"           {len(cp.contacts)} contacts")
+        n_isl = sum(1 for c in cp.contacts if c.node_type_from == "SAT")
+        n_gs  = len(cp.contacts) - n_isl
+        print(f"           {len(cp.contacts)} contacts ({n_isl} ISL, {n_gs} GS-sat)")
         return cp
 
     n_sats = sum(len(v) for v in operators_tles.values())
     n_steps = DURATION_SEC // step + 1
-    print(f"  Computing contact plan: {n_sats} sats × {n_steps} steps "
+    print(f"  [{_ts()}] Computing contact plan: {n_sats} sats × {n_steps} steps "
           f"(step={step}s, range={isl_range:.0f}km, workers={workers})")
 
     t_end = EPOCH + timedelta(seconds=DURATION_SEC)
@@ -168,7 +174,10 @@ def compute_contact_plan(
         "isl_max_range_km": isl_range,
         "n_contacts": len(cp.contacts),
     }, indent=2))
-    print(f"  Contact plan done: {len(cp.contacts)} contacts in {elapsed:.1f}s → {cp_file.name}")
+    n_isl = sum(1 for c in cp.contacts if c.node_type_from == "SAT")
+    n_gs_c = len(cp.contacts) - n_isl
+    print(f"  [{_ts()}] Contact plan done: {len(cp.contacts)} contacts "
+          f"({n_isl} ISL, {n_gs_c} GS-sat) in {elapsed:.1f}s → {cp_file.name}")
     return cp
 
 
@@ -217,7 +226,7 @@ def compute_route_table(
     rt_file = _rt_path(cache, step, isl_range)
     if not force and rt_file.exists():
         size_kb = rt_file.stat().st_size // 1024
-        print(f"  [cached] route table: {rt_file.name} ({size_kb} KB)")
+        print(f"  [{_ts()}] [cached] route table: {rt_file.name} ({size_kb} KB)")
         return rt_file
 
     # Build inter-operator sat pairs (both directions)
@@ -234,12 +243,19 @@ def compute_route_table(
                     pairs.append((sa, sb))
                     pairs.append((sb, sa))
 
+    n_inter_pairs = len(pairs)
+
     # Add same-operator pairs (needed for intra-op routing)
     for op, sats in operators.items():
         for i, sa in enumerate(sats):
             for sb in sats[i + 1:]:
                 pairs.append((sa, sb))
                 pairs.append((sb, sa))
+
+    n_intra_pairs = len(pairs) - n_inter_pairs
+    op_summary = ", ".join(f"{op}:{len(sats)}" for op, sats in sorted(operators.items()))
+    print(f"  [{_ts()}] Operators: {op_summary}")
+    print(f"  [{_ts()}] Pairs: {n_inter_pairs} inter-op + {n_intra_pairs} intra-op = {len(pairs)} total")
 
     buckets = [b * ROUTE_BUCKET_SEC for b in range(DURATION_SEC // ROUTE_BUCKET_SEC + 1)]
     combos: List[Tuple[str, str, float]] = [
@@ -255,7 +271,7 @@ def compute_route_table(
     epoch_iso = EPOCH.isoformat()
     args_list = [(cp_csv, epoch_iso, sat_op_map, chunk) for chunk in chunks]
 
-    print(f"  Computing route table: {len(pairs)} pairs × {len(buckets)} buckets "
+    print(f"  [{_ts()}] Computing route table: {len(pairs)} pairs × {len(buckets)} buckets "
           f"= {total} routes, {len(chunks)} chunks, {workers} workers")
 
     t0 = time.perf_counter()
@@ -276,13 +292,13 @@ def compute_route_table(
 
     elapsed = time.perf_counter() - t0
     hit_rate = len(route_table) * 100 // max(1, total)
-    print(f"\n  Route table done: {len(route_table)}/{total} routes found "
-          f"({hit_rate}%) in {elapsed:.1f}s")
+    print(f"\n  [{_ts()}] Route table done: {len(route_table)}/{total} routes found "
+          f"({hit_rate}%) in {elapsed:.1f}s ({elapsed/60:.1f} min)")
 
     with gzip.open(rt_file, "wt", encoding="utf-8") as f:
         json.dump(route_table, f, separators=(",", ":"))
     size_kb = rt_file.stat().st_size // 1024
-    print(f"  Route table → {rt_file.name} ({size_kb} KB compressed)")
+    print(f"  [{_ts()}] Route table → {rt_file.name} ({size_kb} KB compressed)")
     return rt_file
 
 
@@ -406,7 +422,10 @@ def compute_traffic_schedule(
           f"{len(windows)} ISL windows, {total_active_h:.1f}h active time")
 
     # Distribute windows across workers round-robin for load balance
-    n_workers = min(20,workers, max(1, len(windows)))
+    n_workers = min(32, workers, max(1, len(windows)))
+    if n_workers < workers:
+        print(f"  [{_ts()}] Traffic workers capped at {n_workers} "
+              f"(requested {workers}, windows={len(windows)})")
     chunks: List[List[Tuple[float, float]]] = [[] for _ in range(n_workers)]
     for i, w in enumerate(windows):
         chunks[i % n_workers].append(w)
@@ -422,20 +441,32 @@ def compute_traffic_schedule(
 
     t0 = time.perf_counter()
     all_records: List[dict] = []
+    completed_chunks = 0
 
+    print(f"  [{_ts()}] Traffic: submitting {len(args_list)} chunks to {n_workers} workers ...")
     with ProcessPoolExecutor(max_workers=n_workers) as executor:
-        futures = list(executor.map(_traffic_chunk_worker, args_list))
-        for chunk_recs in futures:
+        futs = {executor.submit(_traffic_chunk_worker, a): i for i, a in enumerate(args_list)}
+        for future in as_completed(futs):
+            chunk_recs = future.result()
             all_records.extend(chunk_recs)
+            completed_chunks += 1
+            pct = completed_chunks * 100 // len(args_list)
+            elapsed_so_far = time.perf_counter() - t0
+            print(f"  [{_ts()}] Traffic: {pct:3d}%  "
+                  f"({completed_chunks}/{len(args_list)} chunks, "
+                  f"{len(all_records)} flows, {elapsed_so_far:.1f}s)   ",
+                  end="\r", flush=True)
+    print()
 
+    print(f"  [{_ts()}] Sorting {len(all_records)} flows by time ...")
     all_records.sort(key=lambda r: r["t"])
     elapsed = time.perf_counter() - t0
 
     with tf_file.open("w") as f:
         json.dump(all_records, f, separators=(",", ":"))
     size_kb = tf_file.stat().st_size // 1024
-    print(f"  Traffic done: {len(all_records)} flows in {elapsed:.1f}s "
-          f"→ {tf_file.name} ({size_kb} KB)")
+    print(f"  [{_ts()}] Traffic done: {len(all_records)} flows in {elapsed:.1f}s "
+          f"({elapsed/60:.1f} min) → {tf_file.name} ({size_kb} KB)")
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -497,13 +528,17 @@ def main() -> None:
     print(f"  min contact dur: {MIN_CONTACT_DURATION_SEC}s ({MIN_CONTACT_DURATION_SEC // 60} min)")
     print()
 
+    t_total_start = time.perf_counter()
+
     # Load TLEs and ground stations
-    print("[1/3] Loading TLEs and ground stations...")
+    print(f"[{_ts()}][1/3] Loading TLEs and ground stations...")
     operators_tles  = TLELoader.load_all(data_dir)
     ground_stations = GSLoader.load_all(data_dir)
     n_sats = sum(len(v) for v in operators_tles.values())
     n_gs   = sum(len(v) for v in ground_stations.values())
     print(f"      {len(operators_tles)} operators, {n_sats} satellites, {n_gs} ground stations")
+    for op, sats in sorted(operators_tles.items()):
+        print(f"        {op}: {len(sats)} satellites")
 
     sat_op_map: Dict[str, str] = {
         sat.sat_id: op
@@ -512,20 +547,20 @@ def main() -> None:
     }
 
     # Phase 1: Contact plan
-    print(f"\n[2/3] Contact plan (step={step}s, range={isl_range:.0f}km)")
+    print(f"\n[{_ts()}][2/3] Contact plan (step={step}s, range={isl_range:.0f}km)")
     cp = compute_contact_plan(
         cache_dir, operators_tles, ground_stations, step, isl_range, workers, force=force_cp
     )
 
     # Phase 2: Route table
     if not args.skip_routes:
-        print(f"\n[3/3a] Route table (step={step}s, range={isl_range:.0f}km)")
+        print(f"\n[{_ts()}][3/3a] Route table (step={step}s, range={isl_range:.0f}km)")
         rt_file = compute_route_table(
             cache_dir, cp, sat_op_map, step, isl_range, workers, force=force_routes
         )
     else:
         rt_file = _rt_path(cache_dir, step, isl_range)
-        print(f"\n[3/3a] Route table: skipped (--skip-routes)")
+        print(f"\n[{_ts()}][3/3a] Route table: skipped (--skip-routes)")
 
     # Phase 3: Traffic schedules — run variants in parallel if route table exists
     if not args.skip_traffic:
@@ -534,19 +569,20 @@ def main() -> None:
             print("       Run without --skip-routes first.")
         else:
             variants = [(seed, rate) for seed in seeds for rate in rates]
-            print(f"\n[3/3b] Traffic schedules: {len(variants)} variant(s)")
+            print(f"\n[{_ts()}][3/3b] Traffic schedules: {len(variants)} variant(s)")
             for i, (seed, rate) in enumerate(variants, 1):
-                print(f"\n  Variant {i}/{len(variants)}: seed={seed}, rate={rate:.6f}")
+                print(f"\n  [{_ts()}] Variant {i}/{len(variants)}: seed={seed}, rate={rate:.6f}")
                 compute_traffic_schedule(
                     cache_dir, cp, sat_op_map, rt_file,
                     seed, rate, step, isl_range, workers,
                     force=force_traffic,
                 )
     else:
-        print("\n[3/3b] Traffic schedules: skipped (--skip-traffic)")
+        print(f"\n[{_ts()}][3/3b] Traffic schedules: skipped (--skip-traffic)")
 
+    elapsed_total = time.perf_counter() - t_total_start
     print("\n" + "=" * 60)
-    print("Precompute complete.")
+    print(f"Precompute complete.  Total: {elapsed_total:.1f}s ({elapsed_total/60:.1f} min)")
     print("=" * 60)
 
 
