@@ -1,10 +1,9 @@
 #!/bin/bash
 #SBATCH --job-name=lios_precompute
-#SBATCH --partition=shared
+#SBATCH --partition=cs
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=32
-#SBATCH --mem=64G
 #SBATCH --time=12:00:00
 #SBATCH --output=logs/precompute_%j.out
 #SBATCH --error=logs/precompute_%j.err

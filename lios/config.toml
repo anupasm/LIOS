@@ -55,7 +55,12 @@ isl_max_kbps = 10_000.0
 gs_max_kbps = 50_000.0
 
 # Default maximum inter-satellite link range (km)
-isl_max_range_km = 2500.0
+# 1500 km matches Starlink's ~550 km shell operational ISL range
+isl_max_range_km = 1500.0
+
+# Maximum simultaneous ISLs a satellite may hold (transceiver limit)
+# 4 = 2 in-plane + 2 cross-plane, matching Starlink laser terminal design
+max_isl_per_sat = 4
 
 # Default minimum ground-station elevation mask (degrees)
 gs_min_elevation_deg = 5.0

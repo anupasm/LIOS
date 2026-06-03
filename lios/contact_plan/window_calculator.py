@@ -402,9 +402,10 @@ class WindowCalculator:
         t_start: datetime,
         t_end: datetime,
         time_step_sec: int = 10,
-        isl_max_range_km: float = 2500.0,
+        isl_max_range_km: float = cfg.link.isl_max_range_km,
         propagation_log_path: Optional[Path] = None,
         checkpoint_dir: Optional[Path] = None,
+        max_isl_per_sat: Optional[int] = None,
     ):
         self.t_start = t_start
         self.t_end = t_end
@@ -412,12 +413,17 @@ class WindowCalculator:
         self.isl_max_range_km = isl_max_range_km
         self.propagation_log_path = propagation_log_path
         self.checkpoint_dir = checkpoint_dir
+        self.max_isl_per_sat: Optional[int] = (
+            max_isl_per_sat if max_isl_per_sat is not None
+            else cfg.link.max_isl_per_sat
+        )
 
     def _ckpt(self, name: str) -> Optional[Path]:
         if self.checkpoint_dir is None:
             return None
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
-        stem = f"step{self.time_step_sec}_range{self.isl_max_range_km:.0f}"
+        isl_tag = f"_deg{self.max_isl_per_sat}" if self.max_isl_per_sat is not None else ""
+        stem = f"step{self.time_step_sec}_range{self.isl_max_range_km:.0f}{isl_tag}"
         return self.checkpoint_dir / f"ckpt_{stem}_{name}"
 
     def compute(
@@ -518,7 +524,8 @@ class WindowCalculator:
         else:
             # Boolean matrix marks pairs seen in range at any sampled timestep.
             # cKDTree reduces O(n²) checks to O(n·k) per step (k = local neighbors).
-            candidate_matrix = np.zeros((n_sats, n_sats), dtype=bool)
+            # Count how many time steps each pair is within range (upper-triangular)
+            step_counts = np.zeros((n_sats, n_sats), dtype=np.int32)
             print(f"    Phase 1.5/3 spatial index: {steps} steps, "
                   f"{n_pairs_max:,} O(n²) pairs ...", flush=True)
             t0 = time.perf_counter()
@@ -532,24 +539,45 @@ class WindowCalculator:
                 )
                 if len(step_pairs):
                     gi, gj = valid_idx[step_pairs[:, 0]], valid_idx[step_pairs[:, 1]]
-                    candidate_matrix[np.minimum(gi, gj), np.maximum(gi, gj)] = True
+                    step_counts[np.minimum(gi, gj), np.maximum(gi, gj)] += 1
                 now = time.perf_counter()
                 if step_idx == steps - 1 or now - _last >= 30:
+                    n_cands = int(np.count_nonzero(step_counts))
                     print(
                         f"    Phase 1.5/3 spatial index: {(step_idx+1)*100//steps:3d}%  "
                         f"({step_idx+1}/{steps} steps, "
-                        f"{int(candidate_matrix.sum()):,} pairs, {now-t0:.1f}s)   ",
+                        f"{n_cands:,} pairs, {now-t0:.1f}s)   ",
                         end="\r", flush=True,
                     )
                     _last = now
             elapsed_cand = time.perf_counter() - t0
-            i_arr, j_arr = np.where(candidate_matrix)
+
+            # Prune each satellite to its top-N partners by total in-range step count
+            if self.max_isl_per_sat is not None:
+                for s in range(n_sats):
+                    # Collect all partners and their counts (upper-tri: s<j; lower-tri: i<s)
+                    partners_lo = np.where(step_counts[:s, s] > 0)[0]   # i < s
+                    partners_hi = np.where(step_counts[s, s+1:] > 0)[0] + s + 1  # j > s
+                    partners = np.concatenate([partners_lo, partners_hi])
+                    if len(partners) <= self.max_isl_per_sat:
+                        continue
+                    counts = np.array([
+                        step_counts[min(p, s), max(p, s)] for p in partners
+                    ])
+                    # Zero out the weakest links beyond the limit
+                    drop = partners[np.argsort(counts)[: len(partners) - self.max_isl_per_sat]]
+                    for p in drop:
+                        step_counts[min(p, s), max(p, s)] = 0
+
+            i_arr, j_arr = np.where(step_counts > 0)
             total_isl = len(i_arr)
-            del candidate_matrix
+            del step_counts
+            deg_note = (f", capped at {self.max_isl_per_sat} ISLs/sat"
+                        if self.max_isl_per_sat is not None else "")
             print(
                 f"    Phase 1.5/3 spatial index: done  "
                 f"{total_isl:,} / {n_pairs_max:,} pairs in {elapsed_cand:.1f}s "
-                f"({100.0 * total_isl / max(1, n_pairs_max):.2f}% of O(n²))"
+                f"({100.0 * total_isl / max(1, n_pairs_max):.2f}% of O(n²)){deg_note}"
             )
             if ckpt_p15:
                 np.savez_compressed(str(ckpt_p15), i=i_arr, j=j_arr)

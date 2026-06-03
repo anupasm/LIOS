@@ -93,6 +93,11 @@ class LinkConfig:
     """Maximum range at which two satellites can maintain an ISL (km).
     Pairs beyond this distance are excluded from the contact plan."""
 
+    max_isl_per_sat: int
+    """Maximum simultaneous ISL connections per satellite (transceiver limit).
+    For each satellite, only the top-N partners by in-range step count are
+    retained after Phase 1.5 — reducing Phase 2 work proportionally."""
+
     gs_min_elevation_deg: float
     """Minimum elevation angle above the horizon required for a GS–satellite
     contact to be considered viable (degrees)."""
