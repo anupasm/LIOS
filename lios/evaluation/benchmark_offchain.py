@@ -487,16 +487,6 @@ def bench_offchain(n: int) -> List[BenchResult]:
         n, "evaluate_settlement_triggers()", sec,
     ))
 
-    # ForwardingLog.serialise() at increasing log sizes
-    for log_size in [10, 100, 1_000]:
-        lg = ForwardingLog("ch")
-        for i in range(log_size):
-            lg.append(i + 1, 1.0, "A_to_B", float(i))
-        results.append(measure(
-            lambda l=lg: l.serialise(),
-            n, f"ForwardingLog.serialise() ({log_size} entries)", sec,
-        ))
-
     # BalanceProof serialisation (on-wire)
     bp = BalanceProof("ch", 100, 500.0, 500.0)
     results.append(measure(
@@ -517,14 +507,11 @@ def bench_offchain(n: int) -> List[BenchResult]:
 def bench_channel_scaling(n: int) -> List[BenchResult]:
     """Measure record_forwarding() latency as open-channel count increases.
 
-    Covers the range from a single bilateral channel up to 10,000 simultaneous
-    channels, stress-testing the O(1) dict-lookup claim at constellation scale.
+    Covers 5 to 50 channels in steps of 5, reflecting realistic per-satellite
+    channel counts in a LEO constellation.
 
     Setup (channel creation) is done outside the timed window via measure_prebuilt
     so we measure only the record_forwarding() call itself.
-
-    n is automatically reduced for large channel counts so that setup time
-    (O(n_ch) channel opens per iteration) stays reasonable.
     """
     results: List[BenchResult] = []
     sec = "5. Channel-count scaling"
@@ -534,16 +521,7 @@ def bench_channel_scaling(n: int) -> List[BenchResult]:
     dummy_sig = b"\x00" * 72
 
     # (n_ch, iterations): reduce n for large n_ch so total setup time stays < ~60s
-    channel_counts = [
-        (1,      n),
-        (10,     n),
-        (50,     n),
-        (100,    n),
-        (500,    max(n // 2, 20)),
-        (1_000,  max(n // 5, 20)),
-        (5_000,  max(n // 20, 10)),
-        (10_000, max(n // 50, 10)),
-    ]
+    channel_counts = [(c, n) for c in range(5, 51, 5)]
 
     for n_ch, n_iter in channel_counts:
         def _setup(nc=n_ch):

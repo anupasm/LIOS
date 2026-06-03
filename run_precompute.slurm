@@ -4,6 +4,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=32
+#SBATCH --mem=32G
 #SBATCH --time=12:00:00
 #SBATCH --output=logs/precompute_%j.out
 #SBATCH --error=logs/precompute_%j.err
@@ -54,9 +55,8 @@ python precompute_hpc.py \
     --workers "$SLURM_CPUS_PER_TASK" \
     --cache   "$CACHE_DIR" \
     --step    30 \
-    --range   2000 \
     --seeds   42 \
-    --rates   0.01
+    --rates   0.3
 
 echo ""
 echo "Precompute finished at $(date)"

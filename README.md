@@ -10,7 +10,7 @@ A research implementation of LIOS, a blockchain-anchored fair-traffic-sharing pr
 lios/
 ├── contact_plan/        # TLE loader, GS loader, SGP4 window calculator
 ├── routing/             # Contact Graph Routing (CGR) — Dijkstra + Yen's K-shortest
-├── crypto/              # ECDSA P-256 key hierarchy, SHA-256 hash chain
+├── crypto/              # ECDSA P-256 key hierarchy
 ├── protocol/            # Off-chain payment channel, auth handshake, ISL FSM
 ├── simulator/           # Discrete-event simulation (DES) core, satellite/GS nodes
 ├── ground/              # Ground-station settlement manager
@@ -28,8 +28,7 @@ lios/
 | Concern | Solution |
 |---|---|
 | Fair traffic accounting | Off-chain bilateral payment channel with co-signed `BalanceProof` |
-| Tamper-evident history | Per-channel SHA-256 hash chain embedded in every `BalanceProof` |
-| On-chain settlement | Hyperledger Fabric chaincode; 48-hour challenge window |
+| On-chain settlement | Fabric chaincode; operator-level channels; co-signed balance reset (T1) or 48-hour dispute window (T7) |
 | Satellite authentication | Ephemeral ECDH (P-256) → AES-256-GCM; mutual cert verification |
 | Routing | Earliest-arrival Dijkstra + Yen's K-shortest over time-expanded contact graph |
 | Fairness metric | Jain index J = (Σx_i)² / (n·Σx_i²), target ≥ 0.95 |
@@ -139,7 +138,6 @@ Defaults: `alt_m = 0.0`, `min_elevation_deg = 5.0`.
 | Module | Purpose |
 |---|---|
 | `key_hierarchy.py` | `OperatorCA`, `SatelliteCert`, `SatelliteKeyStore` |
-| `hash_chain.py` | `HashChainLog` — append-only SHA-256 forwarding history |
 
 ### `protocol/`
 
@@ -198,7 +196,19 @@ fablo down
 ```
 
 The Go chaincode is in `lios/chaincode/isl_settlement/` and implements:
-`OpenOperatorChannel`, `RegisterSatChannel`, `InitiateSettlement`, `ChallengeSettlement`, `FinalizeSettlement`, `RequestTopUp`, `ConfirmTopUp`, `RegisterSatelliteKey`, `RevokeSatelliteKey`, `RecordISLPause`, `RecordISLResume`, `GetPendingNotifications`, `AcknowledgeNotification`.
+`EnsureOperatorChannel`, `SubmitCoSignedSettlement`, `SubmitBalanceReset`, `InitiateSettlement`, `ChallengeSettlement`, `FinalizeSettlement`, `RequestTopUp`, `ConfirmTopUp`, `UpsertSatelliteKey`, `RevokeSatelliteKey`, `GetSatelliteKey`, `RecordISLPause`, `RecordISLResume`, `GetPendingNotifications`, `AcknowledgeNotification`.
+
+Satellite-pair sub-channels are **not** registered on-chain.  A lightweight
+`SettlementRecord` (keyed by satellite pair) is created lazily on first use.
+Dispute state lives in an ephemeral `DisputeRecord` deleted on resolution.
+Satellite public keys are resolved from the on-chain `SatKey` registry.
+
+`SubmitBalanceReset` is the T1 (balance-low) path.  It requires a **co-signed**
+`BalanceProof` (both `sigA` and `sigB` mandatory), verifies both signatures
+against the `SatKey` registry, then debits the net transfer from the operator
+channel: `δ = (b_A + b_B)/2 − b_A`; the satellite that forwarded more has
+lower balance, so its operator is credited and the peer operator is debited.
+After on-chain confirmation both satellites reset to equal-split balance.
 
 ---
 
@@ -210,16 +220,22 @@ ISL contact open
   └─ OffChainProtocol.sync()   ──► agree on latest BalanceProof
 
 Per forwarding batch
-  └─ record_forwarding()  ──► new BalanceProof (half-signed)
-  └─ cosign_proof()       ──► fully signed; both sides update state
+  └─ record_forwarding()       ──► BalanceProof (half-signed, PROOF_PROP to peer)
+  └─ peer: cosign_proof()      ──► PROOF_ACK returned; both sides hold co-signed proof
 
-ISL contact close
-  └─ evaluate_settlement_triggers() ──► T1 (balance low) / T2 (chain full) / T7 (cap)
-  └─ if triggered: GS submits initiateSettlement() to Fabric
-     └─ T_challenge = 48h window
-        ├─ counterpart may challengeSettlement() with newer proof
-        └─ after T_challenge: finalizeSettlement() ──► SETTLED
-  └─ ISL FSM: ACTIVE → PAUSED → (both-ACK) → ACTIVE
+ISL contact close  (trigger evaluation)
+  ├─ T1 (balance low) ──► BALANCE RESET PATH
+  │    └─ PROOF_PROP ─► peer cosigns ─► PROOF_ACK (co-signed proof required)
+  │    └─ both satellites pause traffic
+  │    └─ GS submits SubmitBalanceReset() to Fabric
+  │         └─ verifies both sigs; debits net transfer δ from operator channel
+  │         └─ emits BalanceReset event ──► peer GS notified
+  │    └─ ISL resumes with equal-split balance once both sats ACK
+  │
+  └─ T7 (traffic cap) ──► STANDARD SETTLEMENT PATH
+       └─ GS submits SubmitCoSignedSettlement() to Fabric (co-signed proof)
+          or InitiateSettlement() if proof is single-signed (48h dispute window)
+       └─ ISL FSM: ACTIVE → PAUSED → (both-ACK) → ACTIVE
 ```
 
 ---
