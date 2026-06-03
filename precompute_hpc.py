@@ -24,13 +24,13 @@ Usage (from repo root):
 from __future__ import annotations
 
 import argparse
-import gzip
 import json
 import multiprocessing as mp
 import os
+import sqlite3
 import sys
 import time
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, as_completed, wait
 
 # Prevent BLAS/OpenBLAS from spawning extra threads inside each worker
 # process — parallelism is handled at the process level already.
@@ -77,7 +77,7 @@ def _cp_meta_path(cache: Path, step: int, rng: float) -> Path:
     return cache / f"cp_24h_step{step}_range{rng:.0f}_meta.json"
 
 def _rt_path(cache: Path, step: int, rng: float) -> Path:
-    return cache / f"rt_24h_step{step}_range{rng:.0f}.json.gz"
+    return cache / f"rt_24h_step{step}_range{rng:.0f}.sqlite"
 
 def _tf_path(cache: Path, seed: int, rate: float, step: int, rng: float) -> Path:
     return cache / f"tf_24h_s{seed}_r{rate:.6f}_step{step}_range{rng:.0f}.json"
@@ -258,62 +258,116 @@ def compute_route_table(
     print(f"  [{_ts()}] Pairs: {n_inter_pairs} inter-op + {n_intra_pairs} intra-op = {len(pairs)} total")
 
     buckets = [b * ROUTE_BUCKET_SEC for b in range(DURATION_SEC // ROUTE_BUCKET_SEC + 1)]
-    combos: List[Tuple[str, str, float]] = [
-        (src, dst, b) for (src, dst) in pairs for b in buckets
-    ]
-
-    total = len(combos)
-    # Aim for at least 8 chunks per worker for work-stealing granularity
-    chunk_size = max(1, total // (workers * 8))
-    chunks = [combos[i:i + chunk_size] for i in range(0, total, chunk_size)]
+    total = len(pairs) * len(buckets)
+    # ~5 000 routes per chunk: small enough to stay RAM-light, large enough to
+    # amortise process-pool overhead per Dijkstra call.
+    chunk_size = max(500, min(5_000, total // max(1, workers * 8)))
 
     cp_csv    = str(_cp_path(cache, step, isl_range))
     epoch_iso = EPOCH.isoformat()
-    args_list = [(cp_csv, epoch_iso, sat_op_map, chunk) for chunk in chunks]
 
-    print(f"  [{_ts()}] Computing route table: {len(pairs)} pairs × {len(buckets)} buckets "
-          f"= {total} routes, {len(chunks)} chunks, {workers} workers")
+    def _chunk_gen():
+        """Yield worker-arg tuples one chunk at a time; never builds all combos."""
+        chunk: List[Tuple[str, str, float]] = []
+        for src, dst in pairs:
+            for b in buckets:
+                chunk.append((src, dst, b))
+                if len(chunk) == chunk_size:
+                    yield (cp_csv, epoch_iso, sat_op_map, chunk)
+                    chunk = []
+        if chunk:
+            yield (cp_csv, epoch_iso, sat_op_map, chunk)
 
-    t0 = time.perf_counter()
-    route_table: Dict[str, Optional[dict]] = {}
+    n_chunks = (total + chunk_size - 1) // chunk_size
+    print(f"  [{_ts()}] Computing route table: {len(pairs):,} pairs × {len(buckets)} buckets "
+          f"= {total:,} routes, ~{n_chunks:,} chunks, {workers} workers")
+
+    # Open SQLite for incremental writes; never accumulate results in RAM.
+    conn = sqlite3.connect(str(rt_file))
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=OFF")
+    conn.execute("PRAGMA cache_size=-65536")   # 64 MB page cache
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS routes (
+            key  TEXT PRIMARY KEY,
+            path TEXT NOT NULL
+        )
+    """)
+    conn.commit()
+
+    _DB_BATCH = 20_000        # rows per SQLite executemany
+    pending: List[Tuple[str, str]] = []
+
+    def _flush_db() -> None:
+        conn.executemany("INSERT OR REPLACE INTO routes VALUES (?,?)", pending)
+        conn.commit()
+        pending.clear()
+
+    t0        = time.perf_counter()
     completed = 0
+    n_found   = 0
+    # Keep at most workers×4 futures in flight so RAM stays bounded.
+    MAX_FLIGHT = workers * 4
+    gen         = _chunk_gen()
+    in_flight: set = set()
+    gen_done    = False
+
+    def _refill() -> None:
+        nonlocal gen_done
+        while len(in_flight) < MAX_FLIGHT and not gen_done:
+            try:
+                in_flight.add(executor.submit(_route_chunk_worker, next(gen)))
+            except StopIteration:
+                gen_done = True
 
     with ProcessPoolExecutor(max_workers=workers) as executor:
-        futures = {executor.submit(_route_chunk_worker, a): i for i, a in enumerate(args_list)}
-        for future in as_completed(futures):
-            results = future.result()
-            for key, path_dict in results:
-                if path_dict is not None:
-                    route_table[key] = path_dict
-            completed += len(results)
-            pct = completed * 100 // total
-            print(f"  Route table: {pct:3d}%  ({completed}/{total} routes, "
-                  f"{len(route_table)} with paths)   ", end="\r", flush=True)
+        _refill()
+        while in_flight:
+            done, _ = wait(in_flight, return_when=FIRST_COMPLETED)
+            for fut in done:
+                in_flight.discard(fut)
+                for key, path_dict in fut.result():
+                    if path_dict is not None:
+                        pending.append((key, json.dumps(path_dict, separators=(",", ":"))))
+                        n_found += 1
+                completed += chunk_size   # approximate; last chunk may be smaller
+            if len(pending) >= _DB_BATCH:
+                _flush_db()
+            _refill()
+            pct = min(99, completed * 100 // total)
+            elapsed_so_far = time.perf_counter() - t0
+            print(f"  Route table: {pct:3d}%  ({completed:,}/{total:,} routes, "
+                  f"{n_found:,} with paths, {elapsed_so_far:.0f}s)   ",
+                  end="\r", flush=True)
+
+    if pending:
+        _flush_db()
+    conn.execute("ANALYZE routes")
+    conn.close()
 
     elapsed = time.perf_counter() - t0
-    hit_rate = len(route_table) * 100 // max(1, total)
-    print(f"\n  [{_ts()}] Route table done: {len(route_table)}/{total} routes found "
+    hit_rate = n_found * 100 // max(1, total)
+    size_mb  = rt_file.stat().st_size // (1024 * 1024)
+    print(f"\n  [{_ts()}] Route table done: {n_found:,}/{total:,} routes found "
           f"({hit_rate}%) in {elapsed:.1f}s ({elapsed/60:.1f} min)")
-
-    with gzip.open(rt_file, "wt", encoding="utf-8") as f:
-        json.dump(route_table, f, separators=(",", ":"))
-    size_kb = rt_file.stat().st_size // 1024
-    print(f"  [{_ts()}] Route table → {rt_file.name} ({size_kb} KB compressed)")
+    print(f"  [{_ts()}] Route table → {rt_file.name} ({size_mb} MB)")
     return rt_file
 
 
 # ── Phase 3: Traffic schedule ─────────────────────────────────────────────────
 
 class _RouteTableCGR:
-    """Drop-in CGR replacement backed by a pre-computed route table.
+    """Drop-in CGR replacement backed by a pre-computed SQLite route table.
 
     TrafficGenerator calls cgr.route(src, dst, t_start, k, max_hops).
-    We bucket t_start to ROUTE_BUCKET_SEC and do a dict lookup — O(1)
-    versus the O(E log V) Dijkstra in real CGR.
+    We bucket t_start to ROUTE_BUCKET_SEC and do a single key lookup — O(log N)
+    via SQLite index versus O(E log V) Dijkstra in real CGR. Workers open their
+    own read-only connection so no locking is needed.
     """
 
-    def __init__(self, route_table: Dict[str, Optional[dict]]):
-        self._rt = route_table
+    def __init__(self, rt_path: str):
+        self._conn = sqlite3.connect(f"file:{rt_path}?mode=ro", uri=True)
+        self._conn.execute("PRAGMA query_only=ON")
 
     def route(
         self,
@@ -325,10 +379,12 @@ class _RouteTableCGR:
     ) -> List[CGRPath]:
         bucket = int(t_start / ROUTE_BUCKET_SEC) * ROUTE_BUCKET_SEC
         key = f"{src}|{dst}|{bucket:.0f}"
-        d = self._rt.get(key)
-        if d is None:
+        row = self._conn.execute(
+            "SELECT path FROM routes WHERE key=?", (key,)
+        ).fetchone()
+        if row is None:
             return []
-        return [_dict_to_path(d)]
+        return [_dict_to_path(json.loads(row[0]))]
 
     # ContactPlan-based methods needed by TrafficGenerator are not called
     # when routing is fully pre-computed, but provide stubs just in case.
@@ -358,10 +414,7 @@ def _traffic_chunk_worker(args: tuple) -> List[dict]:
     cp = _CP.from_csv(Path(cp_csv), datetime.fromisoformat(epoch_iso))
     cp.contacts = [c for c in cp.contacts if c.duration_sec >= MIN_CONTACT_DURATION_SEC]
 
-    with gzip.open(rt_path_str, "rt", encoding="utf-8") as f:
-        route_table = json.load(f)
-
-    cgr_rt = _RouteTableCGR(route_table)
+    cgr_rt = _RouteTableCGR(rt_path_str)
     tgen   = _TG(cp, cgr_rt, sat_op_map, arrival_rate=arrival_rate, seed=seed)
 
     n_gn = max(1, len(tgen._ground_nodes))
