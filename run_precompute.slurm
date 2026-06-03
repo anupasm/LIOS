@@ -1,15 +1,15 @@
 #!/bin/bash
 #SBATCH --job-name=lios_precompute
-#SBATCH --partition=high2          # high-memory partition; use bigmem2 if available/needed
+#SBATCH --partition=shared
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=32
-#SBATCH --mem=256G                 # see memory note below
+#SBATCH --mem=64G
 #SBATCH --time=12:00:00
 #SBATCH --output=logs/precompute_%j.out
 #SBATCH --error=logs/precompute_%j.err
 #SBATCH --mail-type=BEGIN,END,FAIL
-#SBATCH --mail-user=shyamdeanuwa@gmail.com
+#SBATCH --mail-user=anupa.desilva@ucd.ie
 
 # ── Memory budget (adjust --mem if you hit OOM) ─────────────────────────────
 #
@@ -41,12 +41,11 @@ echo "Cache dir: $CACHE_DIR"
 echo ""
 
 # ── Load required modules (adjust to what Sonic has) ────────────────────────
-# Check available: module spider python
-module load python/3.11         # or python/3.10 — whatever Sonic provides
-# module load anaconda3         # alternative if using conda
+# Check available: module avail python   OR   module avail anaconda
+module load python/3.11.9-gcc-11.5.0-lcos74i
 
 # If using a virtualenv or conda env, activate it here:
-source "$HOME/LIOS/.env/source/bin/activate"
+source "$HOME/LIOS/.env/bin/activate"
 # conda activate lios
 
 cd "$REPO_DIR"

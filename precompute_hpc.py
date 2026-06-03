@@ -59,7 +59,7 @@ from routing.cgr import CGR, Path as CGRPath
 from simulator.traffic_generator import TrafficFlow, TrafficGenerator
 
 EPOCH = datetime(2025, 11, 19, 0, 15, 0, tzinfo=timezone.utc)
-DURATION_SEC = 86_400
+DURATION_SEC = 21600
 MIN_CONTACT_DURATION_SEC = 600
 ROUTE_BUCKET_SEC = 300  # 5-min buckets matching TrafficGenerator._route_bucket_sec
 
