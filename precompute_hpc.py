@@ -61,7 +61,7 @@ from simulator.traffic_generator import TrafficFlow, TrafficGenerator
 EPOCH = datetime(2025, 11, 19, 0, 15, 0, tzinfo=timezone.utc)
 DURATION_SEC = 21600
 MIN_CONTACT_DURATION_SEC = 600
-ROUTE_BUCKET_SEC = 300  # 5-min buckets matching TrafficGenerator._route_bucket_sec
+ROUTE_BUCKET_SEC = 600  # 10-min buckets — halves route count vs 5-min with negligible accuracy loss
 
 
 def _ts() -> str:
@@ -255,7 +255,46 @@ def compute_route_table(
     n_intra_pairs = len(pairs) - n_inter_pairs
     op_summary = ", ".join(f"{op}:{len(sats)}" for op, sats in sorted(operators.items()))
     print(f"  [{_ts()}] Operators: {op_summary}")
-    print(f"  [{_ts()}] Pairs: {n_inter_pairs} inter-op + {n_intra_pairs} intra-op = {len(pairs)} total")
+    print(f"  [{_ts()}] Pairs: {n_inter_pairs:,} inter-op + {n_intra_pairs:,} intra-op = {len(pairs):,} total")
+
+    # ── Reachability pre-filter ────────────────────────────────────────────────
+    # Build undirected ISL contact graph, then BFS ≤ MAX_HOPS from each node.
+    # Only keep (src, dst) pairs where dst is reachable — eliminates the ~99% of
+    # pairs that would return no route and waste a full Dijkstra call each.
+    MAX_HOPS = 5
+    from collections import defaultdict
+    isl_adj: Dict[str, set] = defaultdict(set)
+    for c in cp.contacts:
+        if c.node_type_from == "SAT" and c.node_type_to == "SAT":
+            isl_adj[c.from_node].add(c.to_node)
+            isl_adj[c.to_node].add(c.from_node)
+
+    def _reachable(src: str) -> set:
+        visited: set = {src}
+        frontier = [src]
+        for _ in range(MAX_HOPS):
+            nxt = []
+            for node in frontier:
+                for nb in isl_adj[node]:
+                    if nb not in visited:
+                        visited.add(nb)
+                        nxt.append(nb)
+            frontier = nxt
+            if not frontier:
+                break
+        visited.discard(src)
+        return visited
+
+    reachable_pairs: set = set()
+    for sat in list(isl_adj):          # only satellites that appear in any contact
+        for dst in _reachable(sat):
+            reachable_pairs.add((sat, dst))
+
+    pairs_before = len(pairs)
+    pairs = [(s, d) for s, d in pairs if (s, d) in reachable_pairs]
+    pct_kept = len(pairs) * 100 // max(1, pairs_before)
+    print(f"  [{_ts()}] Reachability filter: {len(pairs):,} / {pairs_before:,} pairs kept "
+          f"({pct_kept}%, {MAX_HOPS}-hop BFS over {len(isl_adj)} ISL-connected sats)")
 
     buckets = [b * ROUTE_BUCKET_SEC for b in range(DURATION_SEC // ROUTE_BUCKET_SEC + 1)]
     total = len(pairs) * len(buckets)
