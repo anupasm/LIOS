@@ -382,6 +382,7 @@ def compute_route_table(
     if pending:
         _flush_db()
     conn.execute("ANALYZE routes")
+    conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")  # fold WAL back into main file
     conn.close()
 
     elapsed = time.perf_counter() - t0

@@ -108,8 +108,44 @@ class TrafficGenerator:
         # amortising Dijkstra cost over the many flows in each window.
         self._route_cache: dict = {}
         self._route_bucket_sec = 300.0
+
+        # Index: gs_id → [(sat_id, start_sec, end_sec)] — replaces O(n_contacts)
+        # scan in get_reachable_satellites with an O(n_gs_contacts) lookup.
+        self._gs_sat_windows: Dict[str, List[tuple]] = {}
+        for c in contact_plan.contacts:
+            if c.node_type_from == "GS" and c.node_type_to == "SAT":
+                self._gs_sat_windows.setdefault(c.from_node, []).append(
+                    (c.to_node, c.start_time_sec, c.end_time_sec)
+                )
+            elif c.node_type_to == "GS" and c.node_type_from == "SAT":
+                self._gs_sat_windows.setdefault(c.to_node, []).append(
+                    (c.from_node, c.start_time_sec, c.end_time_sec)
+                )
+
+        # Pre-filtered ISL contacts — avoids O(n_contacts) scan in generate_poisson_schedule.
+        self._isl_contacts = [
+            c for c in contact_plan.contacts
+            if c.node_type_from == "SAT" and c.node_type_to == "SAT"
+        ]
+
         # Per-GS contact groups: gs_id → {sat_id → [contacts]} (built lazily)
         self._gs_sat_contacts: Dict[str, Dict[str, list]] = {}
+
+        # Per-operator lists of satellites from OTHER operators (pre-computed once)
+        all_ops = set(operator_map.values())
+        self._other_op_sats: Dict[str, List[str]] = {
+            op: [s for s in self._all_sats if operator_map.get(s, "") != op]
+            for op in all_ops
+        }
+        # Satellites with no known operator — always eligible destinations.
+        self._unknown_op_sats: List[str] = [
+            s for s in self._all_sats if s not in operator_map
+        ]
+        print(f"  [TrafficGenerator] ground_nodes={len(self._ground_nodes)}, "
+              f"all_sats={len(self._all_sats)}, "
+              f"unknown_op_sats={len(self._unknown_op_sats)}, "
+              f"known_ops={sorted(all_ops)}, rate={arrival_rate}, "
+              f"isl_contacts={len(self._isl_contacts)}")
 
     def next_arrival_time(self, t_now: float) -> float:
         """Poisson inter-arrival: exponential distribution."""
@@ -126,8 +162,12 @@ class TrafficGenerator:
         src_gn = self._rng.choice(self._ground_nodes)
         src_op = src_gn.split("-")[0] if "-" in src_gn else "unknown"
 
-        # 2. Reachable satellites from src in lookahead window
-        reachable = self._cp.get_reachable_satellites(src_gn, t_now, t_now + self._lookahead)
+        # 2. Reachable satellites from src in lookahead window — O(n_gs_contacts)
+        t_end_look = t_now + self._lookahead
+        reachable = sorted({
+            sat for sat, ws, we in self._gs_sat_windows.get(src_gn, [])
+            if ws <= t_end_look and we >= t_now
+        })
         if not reachable:
             flow = TrafficFlow(
                 flow_id=str(uuid4()),
@@ -153,7 +193,6 @@ class TrafficGenerator:
         sat_contacts = self._gs_sat_contacts[src_gn]
 
         weights = []
-        t_end_look = t_now + self._lookahead
         for sat in reachable:
             duration = sum(
                 c.duration_sec
@@ -173,11 +212,14 @@ class TrafficGenerator:
 
         # 3. Pick destination satellite — always a different operator.
         # Same-operator flows produce no LIOS settlement events.
-        src_sat_op = self._op_map.get(src_sat, src_op)
-        other_op_sats = [s for s in self._all_sats if self._op_map.get(s, "") != src_sat_op and s != src_sat]
-        if not other_op_sats:
+        src_sat_op = self._op_map.get(src_sat, "")
+        other_op_sats = self._other_op_sats.get(src_sat_op, self._unknown_op_sats)
+        # Exclude src_sat itself (rare but possible if it's the only other-op sat)
+        if not other_op_sats or (len(other_op_sats) == 1 and other_op_sats[0] == src_sat):
             return None
         dst_sat = self._rng.choice(other_op_sats)
+        if dst_sat == src_sat:
+            return None
 
         # 4. Compute path via CGR — cached by 5-min bucket so Dijkstra runs
         #    once per (src, dst, bucket) instead of once per flow.
@@ -209,14 +251,22 @@ class TrafficGenerator:
         Flows are only generated during active ISL contact windows — arrivals outside
         any ISL contact would be dropped by the satellite node anyway.
         """
-        import sys
+        import time as _time
 
-        # Collect ISL windows that overlap [t_start, t_end]
+        _t0 = _time.perf_counter()
+
+        # Collect ISL windows that overlap [t_start, t_end] — uses pre-built index
+        print(f"  [tgen] collecting ISL contacts "
+              f"({len(self._isl_contacts):,} ISL, {len(self._cp.contacts):,} total)...",
+              flush=True)
         raw: List[tuple[float, float]] = sorted(
             (max(c.start_time_sec, t_start), min(c.end_time_sec, t_end))
-            for c in self._cp.get_isl_contacts()
+            for c in self._isl_contacts
             if c.start_time_sec < t_end and c.end_time_sec > t_start
         )
+        print(f"  [tgen] {len(raw)} ISL windows in [{t_start:.0f}, {t_end:.0f}]s "
+              f"({_time.perf_counter()-_t0:.1f}s)", flush=True)
+
         # Merge overlapping windows into disjoint intervals
         merged: List[tuple[float, float]] = []
         for ws, we in raw:
@@ -228,11 +278,17 @@ class TrafficGenerator:
         total_active = sum(we - ws for ws, we in merged)
         n = max(1, len(self._ground_nodes))
         effective_rate = self._rate * n
-        schedule: List[tuple[float, TrafficFlow]] = []
+        expected_flows = int(effective_rate * total_active)
+        print(f"  [tgen] {len(merged)} merged windows, {total_active:.0f}s active, "
+              f"rate={effective_rate:.1f} flows/s, ~{expected_flows:,} expected flows",
+              flush=True)
 
+        schedule: List[tuple[float, TrafficFlow]] = []
         elapsed_active = 0.0
         _report_every = max(1.0, total_active / 20)
         _next_report = _report_every
+        _wall_last = _time.perf_counter()
+        _flows_last = 0
 
         for win_start, win_end in merged:
             t = win_start + self._rng.expovariate(effective_rate)
@@ -245,12 +301,24 @@ class TrafficGenerator:
             elapsed_active += win_end - win_start
             if elapsed_active >= _next_report:
                 pct = int(elapsed_active * 100 / max(1.0, total_active))
+                wall_now = _time.perf_counter()
+                wall_elapsed = wall_now - _t0
+                flows_delta = len(schedule) - _flows_last
+                wall_delta  = wall_now - _wall_last
+                rate_actual = flows_delta / max(wall_delta, 1e-6)
+                cache_size  = len(self._route_cache)
                 print(
-                    f"  Traffic gen: {pct:3d}%  {len(schedule)} flows so far   ",
-                    end="\r", flush=True,
+                    f"  [tgen] {pct:3d}%  {len(schedule):,} flows  "
+                    f"cache={cache_size:,}  {rate_actual:.0f} flows/s  "
+                    f"wall={wall_elapsed:.1f}s   ",
+                    flush=True,
                 )
+                _flows_last  = len(schedule)
+                _wall_last   = wall_now
                 _next_report += _report_every
 
-        print(f"  Traffic gen: done  {len(schedule)} flows scheduled                ")
+        wall_total = _time.perf_counter() - _t0
+        print(f"  [tgen] done: {len(schedule):,} flows in {wall_total:.1f}s  "
+              f"cache_entries={len(self._route_cache):,}", flush=True)
         schedule.sort(key=lambda x: x[0])
         return schedule

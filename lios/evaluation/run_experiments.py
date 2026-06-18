@@ -82,10 +82,10 @@ EXPERIMENT_CONFIGS: List[ExperimentConfig] = [
     # ExperimentConfig("high_density",    duration_sec=5_400,  traffic_load_fraction=0.99, adversarial_mode="none",  random_seed=48, time_step_sec=10),
 
     # Baseline comparison configs (same duration/load as fairness_24h for direct comparison)
-    ExperimentConfig("lios",    duration_sec=7200, traffic_load_fraction=0.9, adversarial_mode="none",  random_seed=49),
-    ExperimentConfig("baseline_greedy",  duration_sec=7200, traffic_load_fraction=0.9, adversarial_mode="none", baseline_protocol="greedy",  random_seed=49),
-    ExperimentConfig("baseline_t4t",     duration_sec=7200, traffic_load_fraction=0.9, adversarial_mode="none", baseline_protocol="t4t",     random_seed=49),
-    ExperimentConfig("baseline_central", duration_sec=7200, traffic_load_fraction=0.9, adversarial_mode="none", baseline_protocol="central", random_seed=49),
+    ExperimentConfig("lios",             duration_sec=86400, traffic_load_fraction=0.3, adversarial_mode="none",  random_seed=42),
+    ExperimentConfig("baseline_greedy",  duration_sec=86400, traffic_load_fraction=0.3, adversarial_mode="none", baseline_protocol="greedy",  random_seed=42),
+    ExperimentConfig("baseline_t4t",     duration_sec=86400, traffic_load_fraction=0.3, adversarial_mode="none", baseline_protocol="t4t",     random_seed=42),
+    ExperimentConfig("baseline_central", duration_sec=86400, traffic_load_fraction=0.3, adversarial_mode="none", baseline_protocol="central", random_seed=42),
 ]
 
 
@@ -94,49 +94,52 @@ EXPERIMENT_CONFIGS: List[ExperimentConfig] = [
 def _compute_contact_traffic(cp, event_log) -> Dict[str, Dict]:
     """Return {contact_id: {traffic_kb, flow_count}} using exact path-hop attribution.
 
-    GS contacts: matched when flow.source_ground_node == GS node and
-                 flow.src_satellite == SAT node.
-    ISL contacts: matched when the contact's (from_node, to_node) pair appears
-                  as consecutive nodes in flow.path.hops (bidirectional).
+    Uses inverted indices (contact-pair → contacts, gs/sat → contacts) so the
+    attribution is O(n_flows × avg_hops) instead of O(n_contacts × n_flows).
     """
-    # Build lightweight flow records once
-    flows = []
-    for entry in event_log:
-        if entry.event_type != EventType.TRAFFIC_ARRIVE or not entry.payload:
-            continue
-        fl = entry.payload
-        hops = fl.path.hops if fl.path is not None else []
-        # Pre-compute set of consecutive (a, b) pairs from the routing path
-        hop_pairs: set = set()
-        for i in range(len(hops) - 1):
-            hop_pairs.add((hops[i], hops[i + 1]))
-            hop_pairs.add((hops[i + 1], hops[i]))  # bidirectional ISL
-        flows.append({
-            "t":        entry.time,
-            "src_gs":   fl.source_ground_node,
-            "src_sat":  fl.src_satellite,
-            "kb":       fl.size_kb,
-            "hp":       hop_pairs,
-        })
+    from collections import defaultdict
+
+    # Build indices: pair → [contact]
+    gs_idx:  Dict[tuple, list] = defaultdict(list)   # (gs, sat) → contacts
+    isl_idx: Dict[tuple, list] = defaultdict(list)   # (sat_a, sat_b) → contacts
 
     result: Dict[str, Dict] = {}
     for c in cp.contacts:
-        kb, n = 0.0, 0
-        t0, t1 = c.start_time_sec, c.end_time_sec
-        is_gs = (c.node_type_from == "GS")
-        pair  = (c.from_node, c.to_node)
-        for fl in flows:
-            if not (t0 <= fl["t"] <= t1):
-                continue
-            if is_gs:
-                if fl["src_gs"] == c.from_node and fl["src_sat"] == c.to_node:
-                    kb += fl["kb"]
-                    n  += 1
-            else:
-                if pair in fl["hp"]:
-                    kb += fl["kb"]
-                    n  += 1
-        result[c.contact_id] = {"traffic_kb": round(kb, 3), "flow_count": n}
+        result[c.contact_id] = {"traffic_kb": 0.0, "flow_count": 0}
+        if c.node_type_from == "GS":
+            gs_idx[(c.from_node, c.to_node)].append(c)
+        else:
+            isl_idx[(c.from_node, c.to_node)].append(c)
+            isl_idx[(c.to_node, c.from_node)].append(c)
+
+    # Attribute each flow's traffic to its contacts
+    for entry in event_log:
+        if entry.event_type != EventType.TRAFFIC_ARRIVE or not entry.payload:
+            continue
+        fl  = entry.payload
+        t   = entry.time
+        kb  = fl.size_kb
+        hops = fl.path.hops if fl.path is not None else []
+
+        # GS uplink contact
+        for c in gs_idx.get((fl.source_ground_node, fl.src_satellite), []):
+            if c.start_time_sec <= t <= c.end_time_sec:
+                result[c.contact_id]["traffic_kb"] += kb
+                result[c.contact_id]["flow_count"]  += 1
+                break
+
+        # ISL hop contacts — use seen set to avoid double-counting bidirectional entries
+        seen: set = set()
+        for i in range(len(hops) - 1):
+            for pair in ((hops[i], hops[i + 1]), (hops[i + 1], hops[i])):
+                for c in isl_idx.get(pair, []):
+                    if c.contact_id not in seen and c.start_time_sec <= t <= c.end_time_sec:
+                        result[c.contact_id]["traffic_kb"] += kb
+                        result[c.contact_id]["flow_count"]  += 1
+                        seen.add(c.contact_id)
+
+    for cid in result:
+        result[cid]["traffic_kb"] = round(result[cid]["traffic_kb"], 3)
     return result
 
 
@@ -562,19 +565,24 @@ def run_experiment(
     from precompute import load_traffic_schedule
     from simulator.traffic_generator import TrafficStats
 
-    arrival_rate = config.traffic_load_fraction * 0.01
+    arrival_rate = config.traffic_load_fraction
     schedule = load_traffic_schedule(
         CACHE_DIR, config.random_seed, arrival_rate,
         config.time_step_sec, config.isl_range_km, config.duration_sec,
     )
 
     if schedule is None:
-        # Cache miss: build CGR (on filtered contacts) and generate traffic
-        from precompute import filter_routing_contacts
+        # Cache miss: generate traffic. Use pre-computed SQLite route table if
+        # available (O(1) lookup), otherwise fall back to full Dijkstra CGR.
+        from precompute import filter_routing_contacts, load_sqlite_cgr
         from precompute import save_traffic_schedule
-        print("  Building CGR routing + traffic schedule...")
         routing_cp = filter_routing_contacts(cp)
-        cgr = CGR(routing_cp, operator_map=sat_op_map)
+        cgr = load_sqlite_cgr(CACHE_DIR, config.time_step_sec, config.isl_range_km)
+        if cgr is not None:
+            print("  Building traffic schedule (SQLite route table)...")
+        else:
+            print("  Building CGR routing + traffic schedule (full Dijkstra)...")
+            cgr = CGR(routing_cp, operator_map=sat_op_map)
         tgen = TrafficGenerator(
             routing_cp, cgr, sat_op_map,
             arrival_rate=arrival_rate,
@@ -721,6 +729,18 @@ def run_experiment(
     if out_dir is not None:
         latency_stats = _write_settlement_log(config.name, all_sats, all_gs, out_dir)
         report["settlement_latency"] = latency_stats
+
+    # 12. Balance events — OFFCHAIN_PROOF_UPDATE snapshots for post-run analysis
+    if out_dir is not None:
+        bal_events = [
+            e for sat in all_sats.values()
+            for e in sat.event_log
+            if e.get("event") == "OFFCHAIN_PROOF_UPDATE"
+        ]
+        bal_path = out_dir / "logs" / f"{config.name}_balance_events.json"
+        with bal_path.open("w") as f:
+            json.dump(bal_events, f, separators=(",", ":"))
+        print(f"  Balance events → {bal_path}  ({len(bal_events):,} snapshots)")
 
     wall = time.time() - t0
     _step(f"8/8  metrics + logs done")

@@ -45,11 +45,12 @@ class ProtocolConfig:
 
     t_low_fraction: float
     """T1 trigger threshold: settlement fires when either side's balance falls
-    below this fraction of the initial channel capacity (default 5 %)."""
+    below this fraction of the initial channel capacity (default 20 %)."""
 
     s_max_kb: int
     """T7 trigger threshold: cumulative bytes forwarded in one session (KB).
-    Default is 100 GB (102 400 000 KB); settlement resets the counter."""
+    Must be < channel_balance_kb so T7 can fire before T1 exhausts the channel.
+    Default 20 480 KB (2× channel_balance_kb = one full channel cycle)."""
 
     t_challenge_sec: float
     """On-chain challenge window after initiateSettlement() (seconds).
@@ -62,7 +63,9 @@ class ProtocolConfig:
 
     channel_balance_kb: int
     """Initial channel balance allocated to each side at open time (KB).
-    Total channel capacity = 2 × this value. Default 1 TB per side."""
+    Total channel capacity = 2 × this value.
+    Simulation default: 10 240 KB (10 MB). Production target: 1 TB per side.
+    flow_size_max_kb must be ≤ this value to avoid guaranteed flow drops."""
 
     timestamp_tolerance_sec: float
     """Maximum allowed clock skew between two satellites during the auth
@@ -137,8 +140,8 @@ class SimulationConfig:
 
     flow_size_max_kb: int
     """Upper clamp on the log-normal flow size distribution (KB).
-    Flows larger than channel_balance_kb will still be dropped at the
-    satellite due to insufficient balance, so set both in tandem."""
+    Must be ≤ channel_balance_kb — the satellite drops any flow whose
+    size_kb exceeds the current channel balance, so keep these in sync."""
 
 
 @dataclass

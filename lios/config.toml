@@ -18,8 +18,10 @@
 t_low_fraction = 0.2           # 20 %
 
 # T7 trigger: cumulative bytes forwarded in one session (KB).
-# 3 MB ≈ 2× the median flow size (1 MB) so T7 fires after ~2 flows per channel.
-s_max_kb = 30000
+# Must be < channel_balance_kb × (1 − t_low_fraction) otherwise T1 always fires first.
+# usable per side = 10_240 × 0.6 = 6_144 KB → s_max must be < 6_144 to be reachable.
+# 4_915 KB ≈ 80% of usable balance → T7 fires after ~2–3 flows, before T1.
+s_max_kb = 4_915
 
 # On-chain challenge window after initiateSettlement() (seconds).
 # Protocol spec: 48 h (172_800).  Reduced to 3 600 s (1 h) so the fallback
@@ -73,7 +75,7 @@ gs_min_elevation_deg = 5.0
 time_step_sec = 30
 
 # Poisson traffic arrival rate (flows per second per ground-station node)
-arrival_rate = 0.01
+arrival_rate = 0.6
 
 # Traffic generator contact-plan lookahead window (seconds)
 lookahead_sec = 600.0
@@ -89,9 +91,11 @@ p_attack = 0.5
 
 # Traffic flow size bounds for the log-normal size distribution (KB)
 # Lower clamp: minimum flow size.  10 KB = one small chunk.
-flow_size_min_kb = 10
-# Upper clamp: maximum flow size.  200_000 KB = ~200 MB
-flow_size_max_kb = 200000
+flow_size_min_kb = 1024
+# Upper clamp: must be ≤ channel_balance_kb or flows will always be dropped
+# (satellite_node drops any flow where size_kb > current channel balance).
+# 10_240 KB = 10 MB matches channel_balance_kb exactly.
+flow_size_max_kb = 10_240
 
 # ── Cryptographic PKI ──────────────────────────────────────────────────────────
 
