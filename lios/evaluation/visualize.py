@@ -248,7 +248,7 @@ def _fig_throughput_fairness(records: List[Dict]) -> go.Figure:
         jain   = r["metrics"].get("jain_fairness_index", 0)
         events = r["metrics"].get("total_forwarding_events", 0)
         load   = r["metrics"].get("_traffic_load",
-                 r["metrics"].get("simulation_stats", {}).get("traffic_load_fraction", 0.5))
+                 r["metrics"].get("simulation_stats", {}).get("traffic_arrival_rate", 0.5))
         name   = r["name"]
         fig.add_trace(go.Scatter(
             x=[events], y=[jain], mode="markers+text", name=name,

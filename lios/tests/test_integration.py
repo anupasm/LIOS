@@ -351,7 +351,7 @@ class TestFairnessIndex:
         cfg = ExperimentConfig(
             name="integration_fairness",
             duration_sec=5_400,   # 90 minutes
-            traffic_load_fraction=0.50,
+            traffic_arrival_rate=0.50,
             adversarial_mode="none",
             random_seed=42,
         )

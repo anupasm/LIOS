@@ -119,7 +119,7 @@ def _run_trial(
     cfg = ExperimentConfig(
         name=name,
         duration_sec=duration_sec,
-        traffic_load_fraction=load,
+        traffic_arrival_rate=load,
         adversarial_mode=attack_mode,
         random_seed=seed,
         p_attack=p_attack,

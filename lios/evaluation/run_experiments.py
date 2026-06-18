@@ -33,7 +33,6 @@ from crypto.key_hierarchy import OperatorCA
 from evaluation.adversarial import MaliciousSatelliteNode
 from evaluation.metrics import MetricsCollector
 from protocol.isl_state_machine import ISLStateMachine
-from routing.cgr import CGR
 from simulator.ground_station_node import FabricMock, GroundStationNode
 from simulator.satellite_node import SatelliteNode, create_satellite
 from simulator.simulator import EventLoop, EventType, SimEvent
@@ -51,7 +50,7 @@ CACHE_DIR = Path(__file__).parent.parent / "cache"
 class ExperimentConfig:
     name: str
     duration_sec: float
-    traffic_load_fraction: float
+    traffic_arrival_rate: float
     adversarial_mode: str    # 'none' | 'rollback' | 'selective_forward'
     random_seed: int = lios_cfg.simulation.random_seed
     isl_range_km: float = lios_cfg.link.isl_max_range_km
@@ -71,72 +70,40 @@ class ExperimentResult:
 
 EXPERIMENT_CONFIGS: List[ExperimentConfig] = [
     # §16.1 Table — all 7 experiment configurations
-    # ExperimentConfig("baseline",        duration_sec=3600,  traffic_load_fraction=0.50, adversarial_mode="none"),
-    # ExperimentConfig("depletion",       duration_sec=5_400,  traffic_load_fraction=0.95, adversarial_mode="none",  random_seed=43),
-    # ExperimentConfig("top_up",          duration_sec=86_400, traffic_load_fraction=0.80, adversarial_mode="none",  random_seed=44),
-    # ExperimentConfig("adversarial_1",   duration_sec=86_400, traffic_load_fraction=0.70, adversarial_mode="rollback",         random_seed=45),
-    # ExperimentConfig("adversarial_2",   duration_sec=86_400, traffic_load_fraction=0.70, adversarial_mode="selective_forward", random_seed=46),
+    # ExperimentConfig("baseline",        duration_sec=3600,  traffic_arrival_rate=0.50, adversarial_mode="none"),
+    # ExperimentConfig("depletion",       duration_sec=5_400,  traffic_arrival_rate=0.95, adversarial_mode="none",  random_seed=43),
+    # ExperimentConfig("top_up",          duration_sec=86_400, traffic_arrival_rate=0.80, adversarial_mode="none",  random_seed=44),
+    # ExperimentConfig("adversarial_1",   duration_sec=86_400, traffic_arrival_rate=0.70, adversarial_mode="rollback",         random_seed=45),
+    # ExperimentConfig("adversarial_2",   duration_sec=86_400, traffic_arrival_rate=0.70, adversarial_mode="selective_forward", random_seed=46),
     # # Config 6: long-duration fairness (24 h, moderate load)
-    # ExperimentConfig("fairness_24h",    duration_sec=86_400, traffic_load_fraction=0.60, adversarial_mode="none",  random_seed=49),
+    # ExperimentConfig("fairness_24h",    duration_sec=86_400, traffic_arrival_rate=0.60, adversarial_mode="none",  random_seed=49),
     # # Config 7: high-density — test throughput ceiling before fairness degrades
-    # ExperimentConfig("high_density",    duration_sec=5_400,  traffic_load_fraction=0.99, adversarial_mode="none",  random_seed=48, time_step_sec=10),
+    # ExperimentConfig("high_density",    duration_sec=5_400,  traffic_arrival_rate=0.99, adversarial_mode="none",  random_seed=48, time_step_sec=10),
 
     # Baseline comparison configs (same duration/load as fairness_24h for direct comparison)
-    ExperimentConfig("lios",             duration_sec=86400, traffic_load_fraction=0.3, adversarial_mode="none",  random_seed=42),
-    ExperimentConfig("baseline_greedy",  duration_sec=86400, traffic_load_fraction=0.3, adversarial_mode="none", baseline_protocol="greedy",  random_seed=42),
-    ExperimentConfig("baseline_t4t",     duration_sec=86400, traffic_load_fraction=0.3, adversarial_mode="none", baseline_protocol="t4t",     random_seed=42),
-    ExperimentConfig("baseline_central", duration_sec=86400, traffic_load_fraction=0.3, adversarial_mode="none", baseline_protocol="central", random_seed=42),
+    ExperimentConfig("lios",             duration_sec=86400, traffic_arrival_rate=0.3, adversarial_mode="none",  random_seed=42),
+    ExperimentConfig("baseline_greedy",  duration_sec=86400, traffic_arrival_rate=0.3, adversarial_mode="none", baseline_protocol="greedy",  random_seed=42),
+    ExperimentConfig("baseline_t4t",     duration_sec=86400, traffic_arrival_rate=0.3, adversarial_mode="none", baseline_protocol="t4t",     random_seed=42),
+    ExperimentConfig("baseline_central", duration_sec=86400, traffic_arrival_rate=0.3, adversarial_mode="none", baseline_protocol="central", random_seed=42),
 ]
 
 
 # ── Contact traffic attribution ────────────────────────────────────────────────
 
-def _compute_contact_traffic(cp, event_log) -> Dict[str, Dict]:
-    """Return {contact_id: {traffic_kb, flow_count}} using exact path-hop attribution.
-
-    Uses inverted indices (contact-pair → contacts, gs/sat → contacts) so the
-    attribution is O(n_flows × avg_hops) instead of O(n_contacts × n_flows).
-    """
-    from collections import defaultdict
-
-    # Build indices: pair → [contact]
-    gs_idx:  Dict[tuple, list] = defaultdict(list)   # (gs, sat) → contacts
-    isl_idx: Dict[tuple, list] = defaultdict(list)   # (sat_a, sat_b) → contacts
-
+def _compute_contact_traffic(cp, satellite_nodes) -> Dict[str, Dict]:
+    """Return successful forwarding volume attributed by direct contact ID."""
     result: Dict[str, Dict] = {}
     for c in cp.contacts:
         result[c.contact_id] = {"traffic_kb": 0.0, "flow_count": 0}
-        if c.node_type_from == "GS":
-            gs_idx[(c.from_node, c.to_node)].append(c)
-        else:
-            isl_idx[(c.from_node, c.to_node)].append(c)
-            isl_idx[(c.to_node, c.from_node)].append(c)
 
-    # Attribute each flow's traffic to its contacts
-    for entry in event_log:
-        if entry.event_type != EventType.TRAFFIC_ARRIVE or not entry.payload:
-            continue
-        fl  = entry.payload
-        t   = entry.time
-        kb  = fl.size_kb
-        hops = fl.path.hops if fl.path is not None else []
-
-        # GS uplink contact
-        for c in gs_idx.get((fl.source_ground_node, fl.src_satellite), []):
-            if c.start_time_sec <= t <= c.end_time_sec:
-                result[c.contact_id]["traffic_kb"] += kb
-                result[c.contact_id]["flow_count"]  += 1
-                break
-
-        # ISL hop contacts — use seen set to avoid double-counting bidirectional entries
-        seen: set = set()
-        for i in range(len(hops) - 1):
-            for pair in ((hops[i], hops[i + 1]), (hops[i + 1], hops[i])):
-                for c in isl_idx.get(pair, []):
-                    if c.contact_id not in seen and c.start_time_sec <= t <= c.end_time_sec:
-                        result[c.contact_id]["traffic_kb"] += kb
-                        result[c.contact_id]["flow_count"]  += 1
-                        seen.add(c.contact_id)
+    for node in satellite_nodes.values():
+        for entry in node.event_log:
+            if entry.get("event") != "TRAFFIC_FORWARDED":
+                continue
+            contact_id = entry.get("contact_id", "")
+            if contact_id in result:
+                result[contact_id]["traffic_kb"] += entry.get("bytes_kb", 0.0)
+                result[contact_id]["flow_count"] += 1
 
     for cid in result:
         result[cid]["traffic_kb"] = round(result[cid]["traffic_kb"], 3)
@@ -444,7 +411,7 @@ def run_experiment(
         _step_t = time.time()
 
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    print(f"\n[EXP] {config.name}: duration={config.duration_sec}s  load={config.traffic_load_fraction}")
+    print(f"\n[EXP] {config.name}: duration={config.duration_sec}s  global_rate={config.traffic_arrival_rate}")
 
     # 1. Load TLEs and ground stations
     print("  Loading TLEs and ground stations...")
@@ -561,30 +528,21 @@ def run_experiment(
 
     _step(f"4/8  {len(all_gs)} ground station nodes")
 
-    # 5–7. Load or compute traffic schedule (paths are embedded in each flow record)
+    # 5–7. Load or compute direct active-pair traffic schedule.
     from precompute import load_traffic_schedule
     from simulator.traffic_generator import TrafficStats
 
-    arrival_rate = config.traffic_load_fraction
+    arrival_rate = config.traffic_arrival_rate
     schedule = load_traffic_schedule(
         CACHE_DIR, config.random_seed, arrival_rate,
         config.time_step_sec, config.isl_range_km, config.duration_sec,
     )
 
     if schedule is None:
-        # Cache miss: generate traffic. Use pre-computed SQLite route table if
-        # available (O(1) lookup), otherwise fall back to full Dijkstra CGR.
-        from precompute import filter_routing_contacts, load_sqlite_cgr
         from precompute import save_traffic_schedule
-        routing_cp = filter_routing_contacts(cp)
-        cgr = load_sqlite_cgr(CACHE_DIR, config.time_step_sec, config.isl_range_km)
-        if cgr is not None:
-            print("  Building traffic schedule (SQLite route table)...")
-        else:
-            print("  Building CGR routing + traffic schedule (full Dijkstra)...")
-            cgr = CGR(routing_cp, operator_map=sat_op_map)
+        print("  Building direct active-pair traffic schedule...")
         tgen = TrafficGenerator(
-            routing_cp, cgr, sat_op_map,
+            cp, sat_op_map,
             arrival_rate=arrival_rate,
             seed=config.random_seed,
         )
@@ -594,9 +552,8 @@ def run_experiment(
             CACHE_DIR, schedule, config.random_seed, arrival_rate,
             config.time_step_sec, config.isl_range_km, config.duration_sec,
         )
-        _step(f"5/8  CGR + traffic schedule ({len(schedule)} flows)")
+        _step(f"5/8  active-pair traffic schedule ({len(schedule)} flows)")
     else:
-        # Paths are pre-computed and embedded in each cached flow — CGR not needed
         tgen_stats = TrafficStats()
         for _, flow in schedule:
             tgen_stats.record(flow)
@@ -612,18 +569,18 @@ def run_experiment(
     loop.seed_contacts_from_plan(cp)
     _step(f"6/8  DES contact events seeded")
 
-    n_routed = 0
+    n_allocated = 0
     for arr_t, flow in schedule:
-        if flow.path and flow.src_satellite:
+        if flow.src_satellite and flow.dst_satellite:
             loop.schedule(SimEvent(
                 time=arr_t,
                 event_type=EventType.TRAFFIC_ARRIVE,
-                from_node=flow.source_ground_node,
+                from_node=flow.src_satellite,
                 to_node=flow.src_satellite,
                 payload=flow,
             ))
-            n_routed += 1
-    _step(f"7/8  {n_routed} flows queued into DES")
+            n_allocated += 1
+    _step(f"7/8  {n_allocated} allocated flows queued into DES")
 
     # 8. Run simulation
     print(f"  Running simulation (t=0..{config.duration_sec:,}s)...")
@@ -632,12 +589,19 @@ def run_experiment(
 
     # 9. Collect metrics
     metrics = MetricsCollector(operator_ids)
-    for log_entry in loop.event_log:
-        if log_entry.event_type == EventType.TRAFFIC_ARRIVE and log_entry.payload:
-            flow = log_entry.payload
-            from_op = sat_op_map.get(flow.src_satellite, "")
-            to_op = sat_op_map.get(flow.dst_satellite, "")
-            metrics.record_forwarding(flow.src_satellite, flow.dst_satellite, flow.size_kb, log_entry.time, from_op, to_op)
+    for sat_id, sat_node in all_sats.items():
+        for entry in sat_node.event_log:
+            if entry.get("event") != "TRAFFIC_FORWARDED":
+                continue
+            peer_id = entry.get("peer_id", "")
+            metrics.record_forwarding(
+                sat_id,
+                peer_id,
+                entry.get("bytes_kb", 0.0),
+                entry.get("t", 0.0),
+                sat_op_map.get(sat_id, ""),
+                sat_op_map.get(peer_id, ""),
+            )
 
     total_isl_contact_sec = sum(
         c.duration_sec for c in cp.get_isl_contacts()
@@ -706,6 +670,13 @@ def run_experiment(
 
     report = metrics.generate_report(total_isl_contact_sec)
     report["simulation_stats"] = stats.to_dict()
+    report["simulation_stats"]["traffic_arrival_rate"] = config.traffic_arrival_rate
+    report["simulation_stats"]["traffic_allocation"] = (
+        lios_cfg.simulation.traffic_allocation
+    )
+    report["simulation_stats"]["traffic_direction_bias"] = (
+        lios_cfg.simulation.traffic_direction_bias
+    )
     report["traffic_gen"] = tgen_stats.summary()
     print(f"  Jain fairness: {report['jain_fairness_index']:.4f}")
     print(f"  Utility Jain:  {report['utility_jain']:.4f}")
@@ -716,7 +687,7 @@ def run_experiment(
     print(f"  Flows generated: {tgen_stats.flows_generated}")
 
     # 10. Per-contact traffic attribution
-    contact_traffic = _compute_contact_traffic(cp, loop.event_log)
+    contact_traffic = _compute_contact_traffic(cp, all_sats)
     if out_dir is not None:
         ct_path = out_dir / "logs" / f"{config.name}_contact_traffic.json"
         ct_path.parent.mkdir(parents=True, exist_ok=True)

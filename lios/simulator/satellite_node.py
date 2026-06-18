@@ -278,41 +278,53 @@ class SatelliteNode:
             return []
         t = event.time
 
-        # Find this satellite's position in the path and identify the next ISL hop.
-        # event.from_node is the originating ground station, not a channel peer.
-        hops = flow.path.hops if flow.path else []
-        try:
-            my_idx = hops.index(self.satellite_id)
-        except ValueError:
-            self._log("TRAFFIC_DROPPED", reason="not_in_path", t=t)
+        if flow.src_satellite != self.satellite_id:
+            self._log(
+                "TRAFFIC_DROPPED",
+                reason="wrong_source_satellite",
+                flow_id=flow.flow_id,
+                t=t,
+            )
             return []
 
-        if my_idx + 1 >= len(hops):
-            # Final destination — no ISL channel to charge.
-            self._log("TRAFFIC_DELIVERED", bytes_kb=flow.size_kb, t=t)
-            return []
-
-        next_hop = hops[my_idx + 1]
+        next_hop = flow.dst_satellite
         channel_id = self._channel_id(next_hop)
 
         if next_hop not in self._active_isls:
-            self._log("TRAFFIC_DROPPED", reason="no_active_isl_contact",
-                      channel_id=channel_id, next_hop=next_hop, t=t)
+            self._log(
+                "TRAFFIC_DROPPED",
+                reason="no_active_isl_contact",
+                flow_id=flow.flow_id,
+                contact_id=flow.contact_id,
+                channel_id=channel_id,
+                next_hop=next_hop,
+                t=t,
+            )
             return []
 
         # Same-operator hops have no settlement channel — forward freely.
         if self._is_same_operator(next_hop):
-            self._log("TRAFFIC_FORWARDED", bytes_kb=flow.size_kb, t=t, channel_id=channel_id)
+            self._log(
+                "TRAFFIC_FORWARDED",
+                flow_id=flow.flow_id,
+                peer_id=next_hop,
+                contact_id=flow.contact_id,
+                bytes_kb=flow.size_kb,
+                t=t,
+                channel_id=channel_id,
+            )
             return []
 
         if not self._protocol.can_forward(channel_id):
             self._log("TRAFFIC_DROPPED", reason="channel_not_active",
+                      flow_id=flow.flow_id, contact_id=flow.contact_id,
                       channel_id=channel_id, next_hop=next_hop, t=t)
             return []
 
         state = self._protocol.get_channel(channel_id)
         if state is None or state.my_balance() < flow.size_kb:
             self._log("TRAFFIC_DROPPED", reason="insufficient_balance",
+                      flow_id=flow.flow_id, contact_id=flow.contact_id,
                       channel_id=channel_id, t=t)
             return []
 
@@ -320,13 +332,22 @@ class SatelliteNode:
         peer_pub = self._ks._operator_keys.get(self._peer_operator(next_hop))
         if peer_pub is None:
             self._log("TRAFFIC_DROPPED", reason="no_peer_key",
+                      flow_id=flow.flow_id, contact_id=flow.contact_id,
                       channel_id=channel_id, next_hop=next_hop, t=t)
             return []
 
         contact_id = self._active_isls.get(next_hop, "")
         proof = self._protocol.record_forwarding(channel_id, flow.size_kb, peer_pub, t, dummy_sig)
         if proof:
-            self._log("TRAFFIC_FORWARDED", bytes_kb=flow.size_kb, t=t, channel_id=channel_id)
+            self._log(
+                "TRAFFIC_FORWARDED",
+                flow_id=flow.flow_id,
+                peer_id=next_hop,
+                contact_id=flow.contact_id,
+                bytes_kb=flow.size_kb,
+                t=t,
+                channel_id=channel_id,
+            )
             self._log(
                 "OFFCHAIN_PROOF_UPDATE",
                 channel_id=channel_id,

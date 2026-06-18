@@ -17,7 +17,7 @@ Usage::
     from config import cfg
 
     cfg.link.isl_max_kbps           # 10_000.0
-    cfg.simulation.arrival_rate     # 0.01
+    cfg.simulation.arrival_rate     # 0.6 global flows/second
     cfg.crypto.cert_valid_days      # 90
 """
 from __future__ import annotations
@@ -115,16 +115,17 @@ class SimulationConfig:
     plan (seconds). Smaller values increase accuracy at the cost of speed."""
 
     arrival_rate: float
-    """Poisson traffic arrival rate per ground-station node (flows/second).
-    The effective network rate scales with the number of ground nodes."""
+    """Global Poisson traffic arrival rate (flows/second).
+    The rate is independent of ground-node, satellite, and active-pair counts,
+    so workloads remain comparable across constellation sizes."""
 
-    lookahead_sec: float
-    """Contact-plan lookahead window used by the traffic generator to find
-    a viable next-hop contact for each flow (seconds)."""
+    traffic_allocation: str
+    """Traffic-allocation policy. ``uniform_active_pair`` samples uniformly
+    from cross-operator satellite pairs with an active ISL at arrival time."""
 
-    cross_operator_bias: float
-    """Probability that a generated flow is destined for a satellite owned
-    by a different operator (drives inter-operator forwarding demand)."""
+    traffic_direction_bias: float
+    """Probability of selecting the canonical A→B direction after sorting a
+    sampled satellite pair by satellite ID. 0.5 gives unbiased directions."""
 
     random_seed: int
     """Default PRNG seed for all stochastic components (traffic generator,
@@ -216,13 +217,30 @@ def load(path: Path | None = None) -> LIOSConfig:
         known = {f.name for f in cls.__dataclass_fields__.values()}  # type: ignore[attr-defined]
         return cls(**{k: v for k, v in data.items() if k in known})
 
-    return LIOSConfig(
+    config = LIOSConfig(
         protocol=_section(ProtocolConfig,     "protocol"),
         link=_section(LinkConfig,             "link"),
         simulation=_section(SimulationConfig, "simulation"),
         crypto=_section(CryptoConfig,         "crypto"),
         blockchain=_section(BlockchainConfig,  "blockchain"),
     )
+    _validate(config)
+    return config
+
+
+def _validate(config: LIOSConfig) -> None:
+    """Reject invalid workload settings before a simulation starts."""
+    sim = config.simulation
+    if sim.arrival_rate <= 0:
+        raise ValueError("simulation.arrival_rate must be greater than zero")
+    if sim.traffic_allocation not in {"uniform_active_pair"}:
+        raise ValueError(
+            "simulation.traffic_allocation must be 'uniform_active_pair'"
+        )
+    if not 0.0 <= sim.traffic_direction_bias <= 1.0:
+        raise ValueError(
+            "simulation.traffic_direction_bias must be between 0.0 and 1.0"
+        )
 
 
 #: Module-level singleton — import this everywhere.

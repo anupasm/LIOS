@@ -74,14 +74,18 @@ gs_min_elevation_deg = 5.0
 # SGP4 orbital propagation time step (seconds)
 time_step_sec = 30
 
-# Poisson traffic arrival rate (flows per second per ground-station node)
+# Global Poisson traffic arrival rate (flows per second).
+# This does not scale with the number of ground nodes, satellites, or active
+# ISL pairs, keeping offered load comparable across constellation sizes.
 arrival_rate = 0.6
 
-# Traffic generator contact-plan lookahead window (seconds)
-lookahead_sec = 600.0
+# Allocate each arrival uniformly across cross-operator satellite pairs that
+# have an active ISL at the arrival time.
+traffic_allocation = "uniform_active_pair"
 
-# Probability that a generated flow is cross-operator (vs same-operator)
-cross_operator_bias = 0.7
+# After sorting the selected pair by satellite ID, probability that traffic
+# travels from the first satellite to the second. 0.5 is directionally unbiased.
+traffic_direction_bias = 0.5
 
 # Default PRNG seed for reproducible runs
 random_seed = 42

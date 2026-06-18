@@ -55,25 +55,28 @@ class GreedySatelliteNode(SatelliteNode):
         if flow is None:
             return []
         t = event.time
-        hops = flow.path.hops if flow.path else []
-        try:
-            my_idx = hops.index(self.satellite_id)
-        except ValueError:
-            self._log("TRAFFIC_DROPPED", reason="not_in_path", t=t)
+        if flow.src_satellite != self.satellite_id:
+            self._log("TRAFFIC_DROPPED", reason="wrong_source_satellite",
+                      flow_id=flow.flow_id, t=t)
             return []
 
-        if my_idx + 1 >= len(hops):
-            self._log("TRAFFIC_DELIVERED", bytes_kb=flow.size_kb, t=t)
-            return []
-
-        next_hop = hops[my_idx + 1]
+        next_hop = flow.dst_satellite
         if next_hop not in self._active_isls:
-            self._log("TRAFFIC_DROPPED", reason="no_active_isl_contact", t=t)
+            self._log("TRAFFIC_DROPPED", reason="no_active_isl_contact",
+                      flow_id=flow.flow_id, contact_id=flow.contact_id, t=t)
             return []
 
         # Forward freely — no payment channel, no balance deduction.
         channel_id = self._channel_id(next_hop)
-        self._log("TRAFFIC_FORWARDED", bytes_kb=flow.size_kb, t=t, channel_id=channel_id)
+        self._log(
+            "TRAFFIC_FORWARDED",
+            flow_id=flow.flow_id,
+            peer_id=next_hop,
+            contact_id=flow.contact_id,
+            bytes_kb=flow.size_kb,
+            t=t,
+            channel_id=channel_id,
+        )
         return []
 
 
@@ -108,24 +111,22 @@ class TitForTatNode(SatelliteNode):
         flow = event.payload
         if flow is None:
             return []
-        hops = flow.path.hops if flow.path else []
-        try:
-            my_idx = hops.index(self.satellite_id)
-        except ValueError:
-            self._log("TRAFFIC_DROPPED", reason="not_in_path", t=event.time)
+        if flow.src_satellite != self.satellite_id:
+            self._log("TRAFFIC_DROPPED", reason="wrong_source_satellite",
+                      flow_id=flow.flow_id, t=event.time)
             return []
 
-        if my_idx + 1 < len(hops):
-            next_hop = hops[my_idx + 1]
-            if not self._is_same_operator(next_hop):
-                fwd = self._contact_fwd.get(next_hop, 0.0)
-                if fwd + flow.size_kb > self.deficit_threshold_kb:
-                    self._log("TRAFFIC_DROPPED", reason="t4t_choke",
-                              fwd_kb=round(fwd, 2),
-                              threshold_kb=self.deficit_threshold_kb,
-                              t=event.time)
-                    return []
-                self._contact_fwd[next_hop] = fwd + flow.size_kb
+        next_hop = flow.dst_satellite
+        if not self._is_same_operator(next_hop):
+            fwd = self._contact_fwd.get(next_hop, 0.0)
+            if fwd + flow.size_kb > self.deficit_threshold_kb:
+                self._log("TRAFFIC_DROPPED", reason="t4t_choke",
+                          flow_id=flow.flow_id, contact_id=flow.contact_id,
+                          fwd_kb=round(fwd, 2),
+                          threshold_kb=self.deficit_threshold_kb,
+                          t=event.time)
+                return []
+            self._contact_fwd[next_hop] = fwd + flow.size_kb
 
         # Delegate to the parent for balance deduction and forwarding logs.
         return super()._on_traffic_arrive(event)

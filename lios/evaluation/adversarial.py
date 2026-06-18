@@ -115,15 +115,7 @@ class MaliciousSatelliteNode(SatelliteNode):
         if self.attack_mode == "selective_forward" and self._rng.random() < self.p_drop:
             flow = event.payload
             bytes_kb = getattr(flow, "size_kb", 0.0) if flow else 0.0
-            # Determine the channel for this hop.
-            hops = flow.path.hops if (flow and flow.path) else []
-            peer_id = None
-            try:
-                my_idx = hops.index(self.satellite_id)
-                if my_idx + 1 < len(hops):
-                    peer_id = hops[my_idx + 1]
-            except ValueError:
-                pass
+            peer_id = flow.dst_satellite if flow and flow.src_satellite == self.satellite_id else None
             channel_id = self._channel_id(peer_id) if peer_id else "unknown"
             # Execute the full balance-proof update (attacker claims credit) …
             super()._on_traffic_arrive(event)
@@ -274,7 +266,7 @@ def run_adversarial_scenario(
     cfg = ExperimentConfig(
         name=f"adversarial_{attack_mode}",
         duration_sec=duration_sec,
-        traffic_load_fraction=0.70,
+        traffic_arrival_rate=0.70,
         adversarial_mode=attack_mode,
         random_seed=random_seed,
     )
