@@ -1,0 +1,8 @@
+tokyo_satellite_station,35.6812996,139.7670658,0.0,5.0
+misasa_deep_space_station_mdss,36.2487978,138.4768500,0.0,5.0
+usuda_deep_space_center_udsc,36.1331387,138.3620260,0.0,5.0
+katsuura_tracking_and_communications_station,35.1522272,140.3208833,0.0,5.0
+masuda_tracking_and_communications_station,30.5693947,131.0091482,0.0,5.0
+okinawa_tracking_and_communications_station,26.5004194,127.9035221,0.0,5.0
+kamisaibara_space_guard_center,35.3121250,133.9413977,0.0,5.0
+earth_observation_center_eoc,36.0030534,139.3491607,0.0,5.0

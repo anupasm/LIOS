@@ -1,0 +1,6 @@
+alaska_satellite_facility,64.8597986,-147.8495933,0.0,5.0
+kennedy_uplink_station,28.4033926,-80.7063246,0.0,5.0
+mcmurdo_ground_station,-77.8455159,166.6697692,0.0,5.0
+ponce_de_leon_station,30.7229671,-85.9374357,0.0,5.0
+wallops_ground_station,37.9330524,-75.4722501,0.0,5.0
+white_sands_ground_station,32.3842202,-106.4918680,0.0,5.0

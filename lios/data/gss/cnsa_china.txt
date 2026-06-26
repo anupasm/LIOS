@@ -1,0 +1,14 @@
+qingdao_ground_station,36.0662299,120.3829900,0.0,5.0
+miyun_receiving_station,40.3689880,116.8408360,0.0,5.0
+lingshui_ground_station,18.5212200,110.0287100,0.0,5.0
+sanya_receiving_station,18.2524799,109.5120900,0.0,5.0
+kunming_receiving_station,25.0137700,102.7238300,0.0,5.0
+jiamusi_ground_station,46.7997599,130.3188200,0.0,5.0
+xiamen_ground_station,24.4795099,118.0894799,0.0,5.0
+beijing_ground_station,39.9042110,116.4073950,0.0,5.0
+sanya_ground_station,18.2524799,109.5120900,0.0,5.0
+changchun_ground_station,43.8160199,125.3235700,0.0,5.0
+neuqu_n_ground_station,-38.9516784,-68.0591888,0.0,5.0
+xi_an_ground_station,34.2166200,109.0972800,0.0,5.0
+weinan_ground_station,34.4999699,109.5101500,0.0,5.0
+nanning_ground_station,22.8167299,108.3669000,0.0,5.0

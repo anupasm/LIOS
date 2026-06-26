@@ -1,0 +1,5 @@
+maddock_ground_station,47.9625088,-99.5301330,0.0,5.0
+sioux_falls_ground_station,43.5460223,-96.7312650,0.0,5.0
+gilmore_creek_ground_station,64.9461427,-147.4601374,0.0,5.0
+alice_springs_ground_station,-23.6980420,133.8807471,0.0,5.0
+keflavik_ground_station,63.9997549,-22.5582716,0.0,5.0

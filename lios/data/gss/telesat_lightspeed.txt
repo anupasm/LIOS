@@ -1,0 +1,6 @@
+allan_park_teleport,44.1791715,-80.9343922,0.0,5.0
+mount_jackson_teleport,38.7459482,-78.6422377,0.0,5.0
+belo_horizonte_teleport,-19.9266755,-43.9243237,0.0,5.0
+calgary_teleport,51.0447331,-114.0718831,0.0,5.0
+montreal_teleport,45.5018869,-73.5673919,0.0,5.0
+winnipeg_teleport,49.8954221,-97.1385145,0.0,5.0

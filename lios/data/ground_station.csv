@@ -1,0 +1,666 @@
+Name,Organization,Type,Location,Latitude,Longitude,Bands,Antenna
+Cebreros Station (CEB1),ESA,Space Agency,"Cebreros, Spain",40.4534748,-4.3682664,"S, X",Parabolic Dish
+UVG Ground Station,Universidad del Valle de Guatemala,University,"Guatemala City, Guatemala",14.603762,-90.489248,,Unknown
+Auckland,INMARSAT,Company,"Auckland, New Zealand",-36.8508827,174.7644881,"L, Ka",Parabolic Dish
+National Institute for Space Research (INPE) Ground Station,INPE,Government Institution,"Cuiabá, Mato Grosso, Brazil",-15.5954635,-56.0925824,"S, X",Various
+AITEX Ground Station,AITEX (Textile Industry Research Association),Research Institution,"Alcoy, Valencian Community, Spain",38.6898481,-0.4965909,,Unknown
+UPV Ground Station,Polytechnic University of Valencia (UPV),University,"Valencia, Valencian Community, Spain",39.4807342,-0.3410958,,Unknown
+SSC - Clewiston Satellite Station,SSC,Company,"Clewiston, Florida, USA",26.7542312,-80.9336753,"S, X",SSC Antenna
+International University of East Africa (IUEA) Ground Station,International University of East Africa,University,"Kampala, Uganda",0.2842201,32.6070004,,Unknown
+Rambouillet Teleport,EUTELSAT,Company,"Rambouillet, France",48.5488916,1.78248,"C, Ku, Ka",Parabolic Dish
+USTM Ground Station (Speculative),Université des Sciences et Techniques de Masuku,University,"Franceville, Gabon (Approximate USTM Location)",-1.6310952,13.5506407,,Unknown
+University of Dodoma (UDOM) Ground Station (Potential),University of Dodoma,University,"Dodoma, Tanzania",-6.2042256,35.7977164,,Unknown
+Paramium Technologies Ground Station Network,Paramium Technologies,Company,"Tucson, Arizona, USA",32.0922008,-110.809041,,Parabolic Dish
+UPM Ground Station,Technical University of Madrid (UPM),University,"Madrid, Community of Madrid, Spain",40.4628515,-3.704893,,Unknown
+SSC - Esrange Space Center Satellite Station,SSC,Company,"Kiruna, Sweden",67.8557995,20.2252821,"UHF, S, X","Multiple S-Band TT&C, S/X-Band Receive"
+Satellite Applications Catapult Goonhilly Ground Station Facility,Satellite Applications Catapult,Research Institution,"Goonhilly Downs, Cornwall, England, UK",50.0481728,-5.1810449,"S, X, Ka",Parabolic Dish
+Optical Ground Station Netherlands,Airbus Defence and Space,Company,"Noordwijk, Netherlands",52.2399885,4.4500094,,Optical Terminal
+King Saud University Ground Station,King Saud University,University,"Riyadh, Saudi Arabia",24.7222078,46.6258804,,Unknown
+SIAE Microelettronica Ground Station,SIAE Microelettronica,Company,"Cologno Monzese, Italy",45.5341935,9.274196,Ka,Microwave Dish
+THK University Ground Station,THK University,University,"Ankara, Turkey",39.9457104,32.6869161,,Unknown
+CRISP Ground Station,"Centre for Remote Imaging, Sensing and Processing (CRISP), National University of Singapore (NUS)",Research Institution,National University of Singapore,1.2976493,103.7766916,"S, X",unknown
+ADFA Ground Station,UNSW Canberra Space,University,"Australian Defence Force Academy (ADFA) Campus, Canberra",-35.2917997,149.1661406,,Unknown
+GLONASS Ground Control Station,Russian Space Forces,Government Institution,"Moscow, Russia",55.7568721,37.6150527,,Various
+Woodbine Teleport,SES S.A.,Company,"Woodbine, Maryland, USA",39.3686877,-77.0569484,"C, Ku, Ka",Parabolic Dish
+UBD Ground Station (Possible),Universiti Brunei Darussalam (UBD),University,"Bandar Seri Begawan, Brunei Darussalam (Approximate, UBD Campus)",4.9723778,114.8937827,,Unknown
+COSMIAC Ground Station,University of New Mexico (COSMIAC),University,"Albuquerque, New Mexico, USA",35.0534393,-106.6182761,"S, X",Parabolic Dish
+Allan Park Teleport,Telesat,Company,"Allan Park, Ontario, Canada",44.1791715,-80.9343922,"Ku, Ka",Parabolic Dish
+Hawaii 1,-,Other,"Hawaii, USA",21.3355147,-157.9046703,"S, X",Parabolic Dish
+Qingdao Ground Station,China Satcom,Company,"Qingdao, China",36.0662299,120.38299,,
+Latvian Geospatial Information Agency (LGIA) GNSS Station,Latvian Geospatial Information Agency,Government Institution,"Riga, Latvia",56.9676941,24.1056221,L,GNSS Receiver
+SSC - Inuvik Satellite Station,SSC,Company,"Inuvik, Canada",68.3190626,-133.54484,"S, X","7.3m, 13m"
+Barreira do Inferno Launch Center (CLBI),AEB,Space Agency,"Parnamirim, Rio Grande do Norte, Brazil",-5.9235691,-35.1674227,"S, X",Various
+CubeSat Ground Station (Old Union),Illinois State University,University,"Normal, Illinois, USA (Illinois State University)",40.5087142,-88.9899174,"UHF, VHF",Unknown
+SSAU Ground-Based Broadcasting Network of Satellite Television Channels,State Space Agency of Ukraine,Space Agency,"Kyiv, Ukraine",50.4503596,30.5245025,,Parabolic Dish
+Sputnix Ground Station,Sputnix,Company,"Moscow, Russia",55.6609353,37.4594297,"X, S",Parabolic Dish
+Vostochny Cosmodrome Ground Station,Roscosmos,Space Agency,"Amur Oblast, Russia",51.8493988,128.3552712,,Parabolic Dish
+Belintersat Ground Control Station,Belintersat,Company,"Stankovo, Dzerzhinsk District, Minsk Oblast, Belarus",53.6390641,27.2098877,,Parabolic Dish
+STT-Ku Band,Gilat Satellite Networks,Company,Unknown,,,Ku,Parabolic Reflector Antenna
+SSC - North Pole Satellite Station,SSC,Company,"North Pole, Alaska, USA",64.7552465,-147.353425,"S, X, SGLS",Multiple SSC Antennas
+NMSU Physical Science Laboratory Ground Station,New Mexico State University (PSL),University,"Las Cruces, New Mexico, USA",32.2790174,-106.7539887,,unknown
+Nuuk Satellite Station,SDFI,Government Institution,"Nuuk, Greenland",64.1743234,-51.7372787,"S, X",Parabolic Dish
+Astrolight Optical Ground Station (OGS-2),Astrolight,Company,"Lithuania, Vilnius",54.6871555,25.2796514,,Optical Laser Terminal
+SSAU Ground Control Complex,State Space Agency of Ukraine,Space Agency,"Kyiv, Ukraine",50.4503596,30.5245025,,Parabolic Dish
+Connecticut SNP,OneWeb,Company,"Connecticut, USA",41.6032207,-73.087749,,Parabolic Dish
+Singapore-1,Spire Global,Company,Singapore,1.352083,103.819836,"UHF, S",Yagi-Uda
+SSC - Punta Arenas Satellite Station,SSC,Company,"Punta Arenas, Chile",-53.1633778,-70.907705,"S, X",7.3m S/X-Band (in Radome)
+Tel Aviv University Ground Station,Tel Aviv University,University,"Tel Aviv, Israel",32.113496,34.803609,,Telescope
+GLONASS Ground Station - Brasilia,ROSCOSMOS,Government Institution,"Brasilia, Brazil",-15.7975154,-47.8918874,,Not specified
+GLONASS Ground Station - Recife,ROSCOSMOS,Space Agency,"Recife, Brazil",-8.0578381,-34.8828969,,Not specified
+GLONASS Ground Station - Santa Maria,ROSCOSMOS,Space Agency,"Santa Maria, Brazil",-29.6897217,-53.8043117,,Not specified
+Satcom Direct Ground Station,Satcom Direct,Company,"Southbury, Connecticut, USA",41.4793072,-73.2133715,,Unknown
+SSC - Santiago Satellite Station,SSC,Company,"Santiago, Chile",-33.149966,-70.667388,"S, C, Ka",Multiple S-Band TT&C Antennas
+University of Arizona Biosphere 2 Spacecraft Command Station,University of Arizona,University,"Oracle, Arizona, USA",32.5784467,-110.8513627,,6.1 meter Radio Antenna
+ICEYE & PGZ Mobile Ground Station,ICEYE & Polska Grupa Zbrojeniowa (PGZ),Company,Poland (exact location classified),51.919438,19.145136,X,Mobile Parabolic Dish
+UMN SmallSat Ground Station,University of Minnesota,University,"Minneapolis, Minnesota, USA",44.9753541,-93.2330739,,Unknown
+UoM Ground Station,University of Mauritius,University,"Réduit, Mauritius",-20.2354463,57.4968057,,Unknown
+Skoltech Space Center Ground Station,Skolkovo Institute of Science and Technology,University,"Moscow, Russia",55.6977407,37.3595732,"X, S",Parabolic Dish
+Matera Space Centre,e-GEOS (Telespazio/ASI),Company,"Matera, Italy",40.6663601,16.6044454,"S, X, Ka",Various
+Inuvik Satellite Station,-,Government Institution,"Inuvik, Canada",68.3190626,-133.54484,"S, X",Parabolic Dish
+Delaware Space Observation Center (DSpOC),Delaware State University & University of Delaware Collaboration,University,"Dover/Newark, Delaware, USA (Delaware State University and University of Delaware)",39.1854009,-75.5444374,,Unknown
+Savannah River Environmental Sciences Field Station Comms,South Carolina State University,University,"Near Blackville, South Carolina, USA",33.3579297,-81.2706606,,Unknown
+SSC - Siracha Satellite Station,SSC,Company,"Siracha, Thailand",13.1012434,100.9281324,"S, X, Ka",7.3m Tri-Band Capable
+Kauai Community College Ground Station,Kauai Community College,University,"Kauai Community College, Lihue, Hawaii, USA",21.9690504,-159.3963137,"UHF, VHF, L, S",Reflector
+Itaboraí Teleport,Telespazio,Company,"Itaboraí, Brazil",-22.7472462,-42.8584458,"C, Ku, Ka",Various
+Lavochkin Association Ground Station,Lavochkin Research and Production Association,Research Institution,"Khimki, Russia",55.8940553,37.4439487,,Parabolic Dish
+University of Hawaiʻi at Mānoa Ground Station (NRL/NPS MC3),University of Hawaiʻi at Mānoa,University,"University of Hawaiʻi at Mānoa, Honolulu, Hawaii, USA",21.2973159,-157.8199094,"UHF, S",Unknown
+Maricá Teleport,Telespazio,Company,"Maricá, Brazil",-22.9160994,-42.819192,"Ka, Ku, C",Various
+NCST Telemetry Station in Brânza (Cahul),Technical University of Moldova (UTM),University,"Brânza, Cahul, Moldova",45.6731812,28.1723636,,Unknown
+Nemea Satellite Station,INMARSAT,Company,"Nemea, Greece",37.82133,22.660998,"S, X",Parabolic Dish
+Plesetsk Cosmodrome,ROSCOSMOS,Government Institution,"Plesetsk, Russia",62.9278549,40.5748409,,Not specified
+SSC - South Point Satellite Station,SSC,Company,"South Point, Hawaii, USA",18.9136111,-155.6833332,"S, X, Ku",Multiple SSC Antennas
+ICEYE Poland Ground Station,ICEYE,Company,"Kielce, Poland",50.8660773,20.6285677,X,Parabolic Dish
+Perth Teleport,SES S.A.,Company,"Perth, Western Australia, Australia",-31.9514294,115.8617055,"C, Ku, Ka",Parabolic Dish
+Diekirch Ground Station,SES S.A.,Company,"Diekirch, Luxembourg",49.8645595,6.1528557,"X, Ka",Parabolic Dish
+Main Centre for Reconnaissance of Situation in Space,Russian Space Forces,Government Institution,"Noginsk-9, Russia",56.0764877,38.5052448,,Various
+Njala University Ground Station (Potential),Njala University,University,"Njala, Sierra Leone",8.110228,-12.0752,,unknown
+SSC - Western Australia Space Center (WASC),SSC,Company,"Dongara, Australia",-29.2451319,114.9326021,"S, X, Ku",Multiple Full-Motion Antennas
+Port Blair ISTRAC Ground Station,ISRO,Space Agency,"Port Blair, India",11.6233774,92.7264828,"S, X",Parabolic Dish
+Luigi Broglio Space Center,ASI,Space Agency,"Malindi, Kenya",-3.2191864,40.1168906,,Various
+SSC - Stockholm Teleport Station,SSC,Company,"Ågesta, Stockholm, Sweden",59.2123224,18.083683,Ku,Multiple Ku-Band Antennas
+Alaska Satellite Facility,NASA,University,"Fairbanks, Alaska, USA",64.8597986,-147.8495933,"S, X",Parabolic Dish
+Kennedy Uplink Station,NASA,Space Agency,"Merritt Island, Florida, USA",28.4033926,-80.7063246,S,Parabolic Dish
+McMurdo Ground Station,NASA,Space Agency,"McMurdo, Antarctica",-77.8455159,166.6697692,"S, X",Parabolic Dish
+Astralintu - Ghana Ground Station (AST-GH-GS3),Astralintu,Company,"Near Sunyani, Ghana",7.3349414,-2.3123031,"L, X",Astralintu Antenna
+Belarus Space Agency Ground Station,Belarus Space Agency,Space Agency,"Minsk, Belarus",53.9006011,27.558972,,Parabolic Dish
+SLARI Ground Station (Potential),Sierra Leone Agricultural Research Institute,Research Institution,"Njala, Sierra Leone (Likely)",8.110228,-12.0752,,unknown
+Yellowknife Ground Station,IRIDIUM,Company,"Yellowknife, Northwest Territories, Canada",62.4539717,-114.3717886,"L, Ka",Parabolic Dish
+New Norcia Station (NNO1),ESA,Space Agency,"New Norcia, Australia",-31.0484992,116.1930286,"S, X, Ka",Parabolic Dish
+Kourou Station (KRU1),ESA,Space Agency,"Kourou, French Guiana",5.1573958,-52.6430108,"S, X",Parabolic Dish
+Institute of Space Technology (IST) Ground Station,Institute of Space Technology (IST),University,Islamabad,33.5194046,73.177541,S,unknown
+"University of Nigeria, Nsukka (Roar Nigeria Hub)",University of Nigeria,University,"Nsukka, Nigeria",6.864233,7.4052103,,unknown
+21AT Ground Station,21AT,Company,"Beijing, China",39.904211,116.407395,,"Unknown, likely parabolic dish"
+Ground Station at Federal University of São João del-Rei (UFSJ),Federal University of São João del-Rei (UFSJ),University,"São João del-Rei, Minas Gerais, Brazil",-21.1362111,-44.2576421,,Turnstile Antenna (designed and 3D built)
+Sejong Station Ground Station,KARI,Space Agency,"Sejong Station, Antarctica",-82.8627519,135,S,Parabolic Dish
+Oberpfaffenhofen Optical Ground Station,DLR,Space Agency,"Oberpfaffenhofen, Bavaria, Germany",48.0808214,11.2860464,,Optical Terminal
+Raisting Earth Station,Deutsche Telekom,Company,"Raisting, Bavaria, Germany",47.899296,11.1156517,"C, Ku, Ka",Parabolic Dish
+Astralintu - Ecuador Ground Station (AST-EC-GS1),Astralintu,Company,"Quito, Ecuador",-0.2009728,-78.4796237,"VHF, UHF, S",Astralintu Antenna
+Hagerstown Teleport,INTELSAT,Company,"Hagerstown, Maryland, USA",39.6417629,-77.7199932,"C, Ku, Ka",Parabolic Dish
+Ground Station at University of Brasília (UnB),University of Brasília (UnB),University,"Brasília, Brazil",-15.7631573,-47.8706311,,unknown
+Akwa Ibom State University Ground Station,Akwa Ibom State University,University,"Ikot Akpaden, Mkpat Enin, Nigeria",4.6264555,7.780724,"VHF, UHF",Yagi-Uda antennas
+SARsat Arabia Ground Station (Potential),SARsat Arabia,Company,"Unknown, likely near KAUST, Saudi Arabia",22.3062911,39.107289,,Unknown
+UISEK Amazon Scientific Station,SEK International University (UISEK),University,"Limoncocha Biological Reserve, Ecuadorian Amazon",-0.4116475,-76.6253865,,unknown
+Groundcom Ground Station,Groundcom,Company,"Brno, Czech Republic",49.1969859,16.6264227,,unknown
+University of Monastir Ground Station,University of Monastir,University,"Monastir, Tunisia",35.763326,10.829131,,unknown
+IIT Bombay Ground Station,Indian Institute of Technology Bombay (IITB),University,"Mumbai, Maharashtra",19.1347303,72.9111005,S,unknown
+PEKASAT SE Ground Station,PEKASAT SE,Company,"Vlkos u Kyjova, Czech Republic",48.989601,17.1635661,"UHF/VHF, S, X",unknown
+BIRA-IASB Ground Station,Royal Belgian Institute for Space Aeronomy,Research Institution,"Brussels, Belgium",50.7967809,4.3569725,,unknown
+Odysseus Space Cyclops Optical Ground Station,Odysseus Space,Company,"Montsec, Spain",40.463667,-3.74922,,Optical
+Astralintu - Canary Islands Ground Station (AST-IC-GS2),Astralintu,Company,"Tenerife, Canary Islands, Spain",28.2915637,-16.6291304,"UHF, S",Astralintu Antenna
+Hughes Germantown Earth Station,Hughes Network Systems,Company,"Germantown, Maryland, USA",39.1731772,-77.2706455,"C, Ku",Parabolic Dish
+Thaicom Satellite Station,Thaicom,Company,"Ladlumkaew, Pathum Thani, Thailand",13.8595073,100.5141722,LEO,Parabolic Dish
+University of La Reunion ground station,University of La Reunion,University,"Réunion, France",-21.115141,55.536384,,unknown
+Optical Ground Station (SOGS),"Centre for Quantum Technologies (CQT), National University of Singapore (NUS)",Research Institution,National University of Singapore (NUS) Campus,1.2976493,103.7766916,,Optical Telescope
+Fukui University of Technology Ground Station,Fukui University of Technology,University,Awara Campus,36.0689822,136.1959134,,Parabolic Antenna
+Iqaluit Ground Station,IRIDIUM,Company,"Iqaluit, Nunavut, Canada",63.7570222,-68.5450017,"L, Ka",Parabolic Dish
+Zone 88 Ground Station,Global Space and Technology Company,Company,"Duqm Special Economic Zone, Oman",19.529473,57.6158803,,unknown
+Astrocast Ground Station Network (Potential),Astrocast,Company,"Lausanne, Switzerland (Astrocast Headquarters)",46.5343429,6.5787579,,Unknown
+TeraNet 1,University of Western Australia (UWA),University,"University of Western Australia, Perth",-31.9513993,115.8616783,,PlaneWave Instruments CDK700
+Cailabs Optical Ground Station,Cailabs,Company,"Rennes, France",48.108691,-1.7234467,,Optical Telescope
+Sriharikota ISTRAC Ground Station,ISRO,Space Agency,"Sriharikota, India",13.7330556,80.2047222,"S, X, C",Parabolic Dish
+Bangalore Satellite Station,ISRO,Space Agency,"Bangalore, India",12.9524713,77.5436302,"S, X",Parabolic Dish
+Miyun Receiving Station,CNSA,Space Agency,"Miyun, Beijing, China",40.368988,116.840836,X,Parabolic Dish
+Goonhilly GHY-6,Goonhilly Earth Station Ltd,Company,"Goonhilly Downs, Cornwall, UK",50.0481728,-5.1810449,"S, X, Ka",Parabolic Dish
+Fucino,INMARSAT,Company,"Fucino, Italy",41.995,13.547222,"L, Ka",Parabolic Dish
+Biak ISTRAC Ground Station,ISRO,Space Agency,"Biak, Indonesia",-1.1605052,136.0506566,"S, X",Parabolic Dish
+Fucino Ground Station,EUMETSAT,"<span data-type=""intl_org"" class=""sc-fTmHRu eFxvc""International Organization","Fucino, Italy",41.995,13.547222,S,Parabolic Dish
+Leuk Ground Station,EUMETSAT,"<span data-type=""intl_org"" class=""sc-fTmHRu eFxvc""International Organization","Leuk, Switzerland",46.3169188,7.6345834,S,Parabolic Dish
+Florida SNP,OneWeb,Company,"Florida, USA",27.6648274,-81.5157535,,Parabolic Dish
+Hawaii SNP,OneWeb,Company,"Hawaii, USA",19.8986819,-155.6658568,,Parabolic Dish
+Ministry of National Defence Earth Observation Ground Station,Polish Ministry of National Defence,Government Institution,Poland (exact location classified),51.919438,19.145136,X,Parabolic Dish
+Cali SNP,OneWeb,Company,"Cali, Colombia",3.4516467,-76.5319854,,Parabolic Dish
+Ifrane Ground Station (Al Akhawayn University),Al Akhawayn University,University,"Ifrane, Morocco",33.5387357,-5.1059503,,Unknown
+Amity University Dubai Ground Station,Amity University Dubai,University,"Dubai, UAE",25.1234558,55.419299,,Unknown
+Punta Arenas Ground Station,IRIDIUM,Company,"Punta Arenas, Chile",-53.1633778,-70.907705,"L, Ka",Parabolic Dish
+Paumalu,INMARSAT,Company,"Paumalu, Hawaii, USA",21.6718129,-158.0394621,"L, Ka",Parabolic Dish
+Greece SNP,OneWeb,Company,"Athens, Greece",37.9838096,23.7275388,,Parabolic Dish
+SpaceX Redmond,SpaceX,Company,"Redmond, Washington, USA",47.6957512,-122.038006,Ka,Phased Array
+Satellite Herd Ground Station,Satellite Herd (航天驭星),Company,"Xi'an (likely), China",34.2658138,108.9540936,,"Unknown, likely parabolic dish"
+Hartebeesthoek Station,SANSA,Space Agency,"Hartebeesthoek, South Africa",-25.6397746,28.0786148,"S, X",Parabolic Dish
+SatNOGS Network Ground Stations,SatNOGS Network,Other,Various locations across Germany,51.165691,10.451526,,Yagi & Parabolic Dish
+Hughes Brazil Earth Station,Hughes Network Systems,Company,"São Paulo, Brazil",-23.5557714,-46.6395571,"C, Ku",Parabolic Dish
+Gandoul Ground Station,SES S.A.,Company,"Gandoul, Senegal",14.497401,-14.452362,Ka,Parabolic Dish
+Ponce de Leon Station,NASA,Space Agency,"Florida, USA",30.7229671,-85.9374357,S,Parabolic Dish
+"Atlas Sunyani, Ghana",ATLAS,Company,"Sunyani, Ghana",7.3349414,-2.3123031,S,3.0m
+Hawley Teleport,SES S.A.,Company,"Hawley, Pennsylvania, USA",41.4759224,-75.1821189,"C, Ku, Ka",Parabolic Dish
+Norbert Zongo University Ground Station,Norbert Zongo University,University,"Koudougou, Burkina Faso",12.2381543,-2.399531,,unknown
+KSAT - Mingenew,KSAT,Company,"Mingenew, Australia",-29.1901805,115.4420525,"UHF, L, S, X",KSAT Antenna
+Tahiti Ground Station,Tahiti Nui Telecom,Company,"Papenoo, French Polynesia",-17.5129118,-149.4233381,,Unknown
+University of Tifariti Ground Station ( احتمal),University of Tifariti,University,"Tifariti, Western Sahara",26.1584875,-10.5591474,,Unknown
+Bahrain Teleport,ABS,Company,"Manama, Bahrain",26.2235305,50.5875935,"C, Ku, Ka",Parabolic Dish
+Lingshui Ground Station,China Satcom,Company,"Lingshui, China",18.52122,110.02871,,
+Maddock Ground Station,Planet Labs,Company,"Maddock, North Dakota, USA",47.9625088,-99.530133,X,Parabolic Dish
+EDRS Ground Station Redu,Airbus Defence and Space,Company,"Redu, Belgium",50.0075195,5.1597629,"S, X, Ka",Parabolic Dish
+Thaicom and Globalstar Satellite Gateway,Thaicom,Company,"Ladlumkaew, Pathum Thani, Thailand",14.0033913,100.6647101,LEO,Parabolic Dish
+BMSTU Radio Telescope Ground Station,Bauman Moscow State Technical University,University,"Moscow, Russia",55.7659869,37.6850105,"X, S",Radio Telescope
+Universidad de la República Ground Station,Universidad de la República,University,"Montevideo, Uruguay",-34.9024023,-56.1766827,,Unknown
+Avantel Ground Station,Avantel Ltd,Company,India,20.593684,78.96288,,unknown
+ITMO University Ground Station,ITMO University,University,"Saint Petersburg, Russia",59.9310584,30.3609097,"X, S",Parabolic Dish
+INRTU Technopark Ground Station,Irkutsk National Research Technical University,University,"Irkutsk, Russia",52.2626348,104.2617307,"X, S",Parabolic Dish
+Keldysh Institute Ground Station,Keldysh Institute of Applied Mathematics,Research Institution,"Moscow, Russia",55.7762288,37.5944577,,Parabolic Dish
+TsNIIMash Ground Station,Central Research Institute of Machine Building (TsNIIMash),Research Institution,"Korolyov, Russia",55.9126791,37.8074447,,Parabolic Dish
+BSUIR Satellite Communication Station,Belarusian State University of Informatics and Radioelectronics,University,"Belarusian State University of Informatics and Radioelectronics, Minsk, Belarus",53.9188056,27.5937053,,Helical Antenna
+NanoAvionics Ground Station,NanoAvionics,Company,"Kaunas, Lithuania",54.8985207,23.9035965,"UHF, VHF",Parabolic Dish
+Belarusian Ground Control Station,Geoinformation Systems,Government Institution,"Stankovo, Dzerzhinsk District, Minsk Oblast, Belarus",53.6358154,27.2169122,,Parabolic Dish
+University Space Center of Montpellier (CSUM) Ground Station,University of Montpellier,University,"Montpellier, France",43.6108535,3.8761323,,unknown
+Ohio 1,Ohio University,University,"Ohio, USA",39.4241422,-84.1857115,"S, X",Parabolic Dish
+"Atlas Awarua, New Zealand",ATLAS,Company,"Awarua, New Zealand",-46.492307,168.3808456,"S, X",3.7m
+BSU Satellite Ground Station,Belarusian State University,University,"Belarusian State University, Minsk, Belarus",53.8930049,27.545623,,Yagi-Uda Antenna
+SSAU Ground Information Complex,State Space Agency of Ukraine,Space Agency,"Kyiv, Ukraine",50.4503596,30.5245025,,Parabolic Dish
+SSAU Remote Telemetric Stations,State Space Agency of Ukraine,Space Agency,"Kyiv, Ukraine",50.4503596,30.5245025,,Parabolic Dish
+University of Delaware CubeSat Ground Station (UD/CSGS),University of Delaware,University,"Newark, Delaware, USA (Likely at or near University of Delaware Campus)",39.6809151,-75.7523313,,Likely Parabolic Dish (10-foot dish mentioned)
+Dunaivtsi Control Center,State Space Agency of Ukraine,Space Agency,"Dunaivtsi, Khmelnytskyi Oblast, Ukraine",48.8957041,26.861818,,Parabolic Dish
+CBK PAN Ground Station,Space Research Centre of the Polish Academy of Sciences (CBK PAN),Research Institution,"Warsaw, Poland",52.2142485,21.0675467,"X, S",Parabolic Dish
+Kyiv Space Radio Monitoring Station,Ukrainian State Centre of Radio Frequencies,Government Institution,"Kyiv, Ukraine",50.4503596,30.5245025,"C, Ku",Parabolic Dish
+Poznan University of Technology Ground Station,Poznan University of Technology,University,"Poznan, Poland",52.3941095,16.91838,"VHF, UHF, C",Yagi-Uda & Parabolic Dish
+Desert Research Center (DRC) Satellite Receiving Station,Desert Research Center (DRC),Research Institution,"Cairo, Egypt (Headquarters)",30.0444196,31.2357116,,Unknown
+BOTSAT-1 Ground Station,Botswana International University of Science and Technology (BIUST),University,"Palapye, Botswana",-22.5514872,27.1147095,,unknown
+University of Ruhuna Ground Station,University of Ruhuna,University,Southern Sri Lanka,5.9380921,80.5761344,,unknown
+National University of Rwanda Ground Station (Potential),National University of Rwanda,University,"Butare, Rwanda",-2.6154291,29.7428526,,Unknown
+Dhruva Space Ground Stations (Multiple Locations),Dhruva Space,Company,Various locations in India,20.593684,78.96288,,unknown
+EDRS Ground Station Harwell,Airbus Defence and Space,Company,"Harwell, United Kingdom",51.601327,-1.288948,Ka,Parabolic Dish
+Montgomery Knight Ground Station,Georgia Institute of Technology,University,"Atlanta, Georgia, USA (Georgia Tech Campus, M. Knight Building)",33.7779791,-84.3979638,,Unknown
+UNIZA Ground Station,Technical University of Žilina,University,"Žilina, Slovakia",49.2032578,18.755246,S,Parabolic Dish
+Borowiec Satellite Laser Ranging Station,Space Research Centre of the Polish Academy of Sciences (CBK PAN),Research Institution,"Borowiec, Poland",52.283333,17.033333,Optical,Laser Ranging System
+Ground Station at Universidad Privada Boliviana,Universidad Privada Boliviana (UPB),University,"La Paz, Bolivia",-16.5752089,-68.1270692,,Unknown
+Kuwait University Ground Station,Kuwait University,University,"Sabah Al-Salem University City, Kuwait University, Kuwait",29.31166,47.481766,,Two antennas (UHF and S-Band)
+Quintillion Utqiagvik Ground Station,Quintillion,Company,"Utqiagvik (Barrow), Alaska, USA",71.2905556,-156.7886111,,Unknown
+GCHQ Bude,GCHQ,Government Institution,"Bude, Cornwall, UK",50.8843649,-4.5510707,"L, C, Ku, X, Ka, V",Various (including Parabolic Dishes)
+Quasar Satellite Technologies Ground Station,Quasar Satellite Technologies,Company,"Marsfield, NSW (near Sydney)",-33.7734282,151.0988683,,Multi-beam phased array
+TarQis Mobile Quantum-Optical Ground Station (Q-OGS),SpeQtral,Company,Transportable globally,,,,Optical Telescope
+Khalifa University Ground Station,Khalifa University,University,"Abu Dhabi, UAE",24.4473556,54.3949088,"VHF, UHF, S-band",Unknown
+Aalto University Educational Satellite Ground Station,Aalto University,University,"Otaniemi, Espoo, Finland (Maarintie 8)",60.1871435,24.8191407,"VHF, UHF, S-band",Fully steerable antennas
+EIRSAT-1 Ground Station (Proposed),University College Dublin (UCD),University,"UCD School of Physics, Dublin",53.3089454,-6.2245827,"UHF, VHF, S",unknown
+Lucknow ISTRAC Ground Station,ISRO,Space Agency,"Lucknow, India",26.9485309,80.9705292,"S, X",Parabolic Dish
+Makerere University Ground Station,Makerere University,University,"Kampala, Uganda",0.3326347,32.5685861,,Unknown
+Norway SNP,OneWeb,Other,"Tromsø, Norway",69.6497717,18.984122,,Parabolic Dish
+Paramium Technologies Ground Station Reflectors,Paramium Technologies,Company,"Tucson, Arizona, USA",32.0922008,-110.809041,,Reflector
+SSAU Main Special Control Center,State Space Agency of Ukraine,Space Agency,"Kyiv, Ukraine",50.4503596,30.5245025,,Parabolic Dish
+Toulouse Space Centre (CST),CNES,Space Agency,"Toulouse, France",43.5617505,1.4817325,"S, X",Parabolic Dish
+Oregon 1,ODOT,Government Institution,"Oregon, USA",45.7586628,-123.2685318,"S, X",Parabolic Dish
+Mount Jackson Teleport,Telesat,Company,"Mount Jackson, Virginia, USA",38.7459482,-78.6422377,"Ku, Ka",Parabolic Dish
+Goonhilly Earth Station,SES S.A.,Company,"Goonhilly Downs, Cornwall, United Kingdom",50.0481728,-5.1810449,"S, X, Ka",Parabolic Dish
+NOI Techpark Ground Station,NOI Techpark,Research Institution,"Bolzano, Italy",46.4785907,11.3325921,,Parabolic Dish
+ISU Communications Lab Ground Station,Iowa State University,University,"Ames, Iowa, USA",42.0307812,-93.6319131,,Yagi-Uda
+ORION Space Ground Station,ORION Space,Company,"Kathmandu, Nepal",27.6697273,85.3660144,,Unknown
+Wahiawa Ground Station,IRIDIUM,Company,"Wahiawa, Hawaii, USA",21.4959617,-158.0297748,"L, Ka",Parabolic Dish
+Gerolstein Ground Station,Airbus Defence and Space,Company,"Gerolstein, Germany",50.2237208,6.6604956,"C, X, Ku",Parabolic Dish
+Nemea,INMARSAT,Company,"Nemea, Greece",37.82133,22.660998,"L, Ka",Parabolic Dish
+National Center for Space Research and Technology Ground Station,National Center for Space Research and Technology,Research Institution,Kazakhstan,48.019573,66.923684,"S, X",Unknown
+Institute of the Ionosphere Ground Station,Institute of the Ionosphere,Research Institution,Kazakhstan,48.019573,66.923684,,Callisto radio spectrometer (eC37)
+USM CubeSat Ground Station,University of Southern Maine (USM),University,"Gorham, Maine, USA",43.725107,-70.5260124,,Unknown
+Clarkson University Ground Station (Potential),Clarkson University,University,"Potsdam, New York, USA",44.6639493,-74.9990832,,Unknown
+Airbus Defence and Space Direct Receiving Station,Airbus Defence and Space,Company,Poland (Exact location undisclosed),51.919438,19.145136,X,Parabolic Dish
+Utah Tech Earth Station,Utah Tech University,University,"St. George, Utah, USA",37.1028746,-113.56541,,Cross Yagi (UHF)
+Um Alaish 4,Orbital Space,Company,"Um Alaish, Kuwait (approximate)",29.8085971,47.7286327,,Dish Antenna (likely)
+Turtle Island Space Ground Station,Turtle Island Space,Company,"Noordwijk, Netherlands (SBIC Noordwijk)",52.2399885,4.4500094,,Unknown
+ASU Tempe Campus Ground Station,Arizona State University,University,"Tempe, Arizona, USA",33.4165625,-111.9346609,"S, X, L",10ft Dish and dual 2m-band yagis
+Potential Ground Station Name,University/Research Institution/Startup Name,Research Institution,"City, Region, Senegal",14.497401,-14.452362,,Unknown
+University of Sierra Leone Ground Station (Potential),University of Sierra Leone,University,"Freetown, Sierra Leone",8.4770089,-13.2214709,,unknown
+Mahanakorn University of Technology (MUT) Ground Station,Mahanakorn University of Technology,University,"Bangkok, Thailand",13.8422302,100.8554904,,unknown
+Air University Ground Station,Air University,University,Islamabad,33.713832,73.024654,,unknown
+UTEP Satellite Ground Station,University of Texas at El Paso (UTEP),University,"El Paso, Texas, USA",31.7785184,-106.1838325,,Parabolic Dish & Yagi Array
+CTIC Ground Station (National University of Engineering - UNI),National University of Engineering (UNI),University,"Lima, Peru",-12.0238022,-77.0484059,,Unknown
+USP Nauru Campus Ground Station,University of the South Pacific,University,"Aiwo District, Nauru",-0.5340012,166.9138873,,Unknown
+UPTC Ground Station,Universidad Pedagógica y Tecnológica de Colombia (UPTC),University,"Universidad Pedagógica y Tecnológica de Colombia (UPTC), Tunja",5.5520095,-73.3566646,,unknown
+Daka Space Technologies Ground Station,Daka Space Technologies (DST) LTD,Company,"Blantyre, Malawi",-15.7879694,35.0133228,,unknown
+University of Zambia (UNZA) Ground Station,University of Zambia,University,"Lusaka, Zambia",-15.3934745,28.3271246,,unknown
+Técnico Lisboa Ground Station (Taguspark Campus),Instituto Superior Técnico (University of Lisbon),University,"Oeiras, Portugal (Taguspark Campus)",38.7406149,-9.3041717,,unknown
+All Nations University Space Systems Technology Laboratory (ANU-SSTL) Amateur Ground Station,All Nations University,University,"Koforidua, Ghana",6.0949324,-0.2560458,,unknown
+BRAC University Ground Station,BRAC University,University,"Mohakhali, Dhaka, Bangladesh",23.7805115,90.4074633,,Unknown
+International Space University (ISU) Ground Station,International Space University,University,"Strasbourg, France",48.5234429,7.736957,,unknown
+ASCC Potential Ground Station,American Samoa Community College,University,"Mapusaga, American Samoa (Likely)",-14.3222987,-170.7419422,,unknown
+ESOC-3,ESA,Space Agency,"Darmstadt, Germany (ESOC)",49.8708073,8.6227563,S,Offset Parabolic Dish
+Aussaguel Station,CNES,Space Agency,"Aussaguel, France",43.429268,1.5015989,"S, X",Parabolic Dish
+Kashgar Ground Station,Kashgar,Research Institution,"Kashgar, Xinjiang, China",39.4677199,75.99381,"S, X",Parabolic Dish Array
+"Atlas Chitose, Japan",ATLAS,Company,"Chitose, Japan",42.8212867,141.6510125,"S, X",3.4m
+MIT-WPU Ground Station,MIT World Peace University (MIT-WPU),University,"Pune, Maharashtra",18.5177559,73.8151112,,unknown
+Université des Antilles,Université des Antilles,University,Guadeloupe and Martinique,16.2242724,-61.5289325,,unknown
+Castle Rock Teleport,INTELSAT,Company,"Castle Rock, Colorado, USA",39.3788787,-104.8560901,"C, Ku, Ka",Parabolic Dish
+"Atlas Dundee, Scotland",ATLAS,Company,"Dundee, Scotland",56.462018,-2.970721,"S, X",3.7m
+"Atlas Dubai, United Arab Emirates",ATLAS,Company,"Dubai, United Arab Emirates",25.2048493,55.2707828,"S, X",3.7m
+"Atlas Harmon, Guam",ATLAS,Company,"Harmon, Guam",13.5012706,144.8065938,"S, X",3.7m
+"Atlas Mojave, CA, USA",ATLAS,Company,"Mojave, CA, USA",35.0475381,-118.1706661,"S, X",3.0m
+"Atlas Utqiagvik (Barrow), AK, USA",ATLAS,Company,"Utqiagvik (Barrow), AK, USA",71.2905556,-156.7886111,"S, X",3.7m
+Skolkovo Innovation Center Ground Station,Skolkovo Innovation Center,Company,"Moscow, Russia",55.6934239,37.3432388,"X, S",Parabolic Dish
+Western Michigan University Ground Station,Western Michigan University - Western Aerospace Launch Initiative (WALI),University,"Kalamazoo, Michigan, USA",42.2837337,-85.6102506,,Unknown
+Rutgers University Ground Station (RUCOOL),Rutgers University,University,"New Brunswick, New Jersey, USA",40.479273,-74.4369932,,Unknown
+"Atlas Tahiti, French Polynesia",ATLAS,Company,"Tahiti, French Polynesia",-17.6509195,-149.4260421,"S, X",3.7m
+Baikonur Cosmodrome,ROSCOSMOS,Space Agency,"Baikonur, Kazakhstan",45.6128811,63.3057681,,Not specified
+COMSAT Southbury Teleport,COMSAT (Goonhilly Group),Company,"Southbury, Connecticut, USA",41.451766,-73.289344,"C, L, Ka, Ku",Unknown
+CatSat Ground Station,University of Arizona,University,"Tucson, Arizona, USA",32.2539787,-110.9741769,,Cross Polarized Yagi
+ASU Space Tracking Station,Arizona State University (ASU),University,"Tempe, Arizona, USA",33.4179694,-111.9285014,"S, X, L",10ft Dish and dual 2m-band yagis
+Cajun Advanced Picosatellite Experiment (CAPE) Ground Station,University of Louisiana at Lafayette,University,"Lafayette, Louisiana, USA",30.2111218,-92.0209652,,Unknown
+"Atlas Paumalu, Hawaii, USA",ATLAS,Company,"Paumalu, Hawaii, USA",21.6718129,-158.0394621,"S, X",7.3m
+Ventspils International Radio Astronomy Centre (VIRAC),Ventspils University of Applied Sciences,University,"Ventspils, Latvia",13.6193864,124.1754442,"S, X, Ka",Parabolic Dish
+"University of Florida Ground Station (Likely, Details Unknown)",University of Florida,University,"Gainesville, Florida, USA (Approximate)",29.6465428,-82.3533266,,Unknown
+"Atlas Mwulire, Rwanda",ATLAS,Company,"Mwulire, Rwanda",-1.9766468,30.4043546,"S, X",9.3m
+UniClOGS (University Class Open Ground Station),"Portland State Aerospace Society (PSAS), Portland State University",University,"Portland, Oregon, USA",45.515232,-122.6783853,,Unknown
+UMass Lowell Ground Station (Olney Science Center),University of Massachusetts Lowell,University,"Lowell, Massachusetts, USA",42.6551977,-71.3255603,,Patch Array
+Yangambi Research Station,Congolese Institute for Agronomic Research (INERA),Research Institution,"Yangambi, Democratic Republic of the Congo",0.8070691,24.4529792,,Unknown
+"Atlas Sodankylä, Finland*",ATLAS,Company,"Sodankylä, Finland*",67.415999,26.5889727,"S, X",7.3m
+Neustrelitz Ground Station,DLR,Space Agency,"Neustrelitz, Germany",53.3593708,13.0743314,"S, X, Ka",Parabolic Dish
+MIT Haystack Observatory,MIT,University,"Westford, Massachusetts, USA",42.6233874,-71.4881645,"S, X, Ka",Radio Telescope
+UNL Research Ground Station (Potential),University of Nebraska-Lincoln,University,"Lincoln, Nebraska, USA (Approximate UNL Location)",40.8180708,-96.7017603,,Unknown
+OreSat Ground Station,Portland State Aerospace Society (PSAS),University,"Portland State University, Portland, Oregon, USA",45.5111153,-122.6833385,,Handheld
+CONTEC Ground Station (Jeju Island),CONTEC,Company,"Jeju Island, South Korea",33.3785614,126.5661908,"S, X, VHF, UHF",Unknown
+Brown University Ground Station,Brown University,University,"Providence, Rhode Island, USA",41.8267718,-71.4025482,,Unknown
+K7MSU Ground Station,Montana State University,University,"Bozeman, Montana, USA",45.6793119,-111.037259,,VHF/UHF Yagi antenna array
+"Atlas Öjebyn, Sweden",ATLAS,Company,"Öjebyn, Sweden",65.342949,21.3968857,"S, X, Ka",7.3m
+"Atlas North Pole, Alaska, USA",ATLAS,Company,"North Pole, Alaska, USA",64.7552465,-147.353425,"S, X, Ka",7.3m
+Cheia Ground Station,EUMETSAT,"<span data-type=""intl_org"" class=""sc-fTmHRu eFxvc""International Organization","Cheia, Romania",45.4581462,25.9382467,S,Parabolic Dish
+Space Operations Center (COPE),COMAE,Government Institution,"Brasília, Distrito Federal, Brazil",-15.858406,-47.8995208,"S, X",Various
+University Class Open Ground Station (UniClOGS),Portland State Aerospace Society (PSAS),University,"Portland State University Engineering Building, Portland, Oregon, USA",45.509223,-122.6808946,,Configurable
+DC Blox Myrtle Beach Data Center,DC Blox,Company,"Myrtle Beach, South Carolina, USA",33.6747929,-78.9425936,,Unknown
+Ohio University Bobcat-1 GS,Ohio University,University,"Athens, Ohio, USA",39.3250119,-82.1031139,,Yagi (UHF)
+Vermont State University (VTSU) CubeSat Lab Ground Station,Vermont State University,University,"Randolph, Vermont, USA (Approximate)",43.9247446,-72.6656948,,Unknown
+"Atlas Stockholm, Sweden*",ATLAS,Company,"Stockholm, Sweden*",59.3327036,18.0656255,"S, X",5.4m
+Burum,INMARSAT,Company,"Burum, Netherlands",53.2733128,6.2299369,"L, Ka",Parabolic Dish
+Virginia Tech Ground Station (VTGS),Virginia Tech,University,"Blacksburg, Virginia, USA",37.2283843,-80.4234167,,"Yagi-Uda, Parabolic Dish"
+Old Dominion University Ground Station (ODUGS),Old Dominion University,University,"Norfolk, Virginia, USA",36.8839664,-76.3039779,,Unknown
+University of Auckland Ground Station,University of Auckland,University,"Auckland, New Zealand",-36.8508827,174.7644881,,RF Ground Station
+"Atlas Dublin, Ireland*",ATLAS,Company,"Dublin, Ireland*",53.3303362,-6.2645968,"S, X",5.4m
+SpaceX Kuparuk,SpaceX,Company,"Kuparuk, Alaska, USA",70.4244444,-148.8708332,Ka,Phased Array
+"Atlas Guildford, United Kingdom",ATLAS,Company,"Guildford, United Kingdom",51.23622,-0.570409,"S, X",5.4m
+AUB Ground Station (Hypothetical),American University of Beirut (AUB),University,"Beirut, Lebanon",33.9024626,35.4821829,,Unknown
+TRISAT Ground Station,TRISAT,Research Institution,"Maribor, Slovenia",46.5546503,15.6458812,"S, UHF, VHF",Parabolic Dish
+ICT University Tiny-GS Ground Station,ICT University,University,"Yaounde, Cameroon",3.9527694,11.5166647,,Unknown
+INRAS Ground Station (Pontifical Catholic University of Peru - PUCP),Pontifical Catholic University of Peru (PUCP),University,"Santa María Campus, Lima, Peru",-12.0466888,-77.0430886,,Yagi-array
+ITC Ground Station,Institute of Technology of Cambodia (ITC),University,"Phnom Penh, Cambodia",11.5563738,104.9282099,,Unknown
+INIA Research Ground Station,National Agricultural Research Institute (INIA),Research Institution,"Canelones, Uruguay",-34.5246844,-56.2812104,,Unknown
+Onsala Space Observatory Ground Station,Chalmers University of Technology,University,"Onsala, Sweden",57.3958096,11.9265034,"S, X, Ka",Parabolic Dish
+CURTS Ground Station (Mohammed V University),Mohammed V University,University,"Rabat, Morocco",33.999061,-6.8436164,,Unknown
+Chelmos Observatory Optical Ground Station,National Observatory of Athens,Research Institution,"Mount Chelmos, Northern Peloponnese, Greece",37.349722,22.352222,,Optical Telescope
+UNC Research Ground Station,University of New Caledonia,University,"Nouméa, New Caledonia",-22.2629042,166.4032884,,Unknown
+Fez Ground Station (Dhar El Mahraz University),Dhar El Mahraz University,University,"Fez, Morocco",34.0334371,-4.9768663,,Unknown
+Skinakas Observatory Optical Ground Station,Foundation for Research and Technology - Hellas (FORTH),Research Institution,"Mount Ida (Psiloritis), Crete, Greece",35.2117919,24.8980388,,Optical Telescope
+Esrange University Ground Station,Luleå University of Technology,University,"Esrange Space Center, Kiruna, Sweden",67.8557995,20.2252821,"S, X",Parabolic Dish
+Argentina SNP,OneWeb,Company,"Buenos Aires, Argentina",-34.6036739,-58.3821215,,Parabolic Dish
+Attisat Ground Station,Attisat,Company,"Athens, Greece",37.9595665,23.6931844,,Unknown
+NCST Satellite Telemetry Ground Station,Technical University of Moldova (UTM),University,"Kishinev, Moldova",47.0104529,28.8638103,,Unknown
+Falkland Islands Community School Ground Station,Falkland Islands Community School,University,"Stanley, Falkland Islands",-51.6931263,-57.8710414,,Unknown
+Polytechnic University of Tirana Ground Station (Potential),Polytechnic University of Tirana,University,"Tirana, Albania (Approximate)",41.316766,19.8215501,,Unknown
+University of Juba Ground Station,University of Juba,University,"Juba, South Sudan",4.8409282,31.5904999,,Unknown
+CPUT Ground Station,Cape Peninsula University of Technology (CPUT),University,"Cape Town, South Africa",-33.922087,18.4231418,,Unknown
+CCRF Ground Station,Georgia Institute of Technology,University,"Atlanta, Georgia, USA (Georgia Tech Campus)",33.7779791,-84.3979638,,Unknown
+ERIS - Chetumal,El Colegio de la Frontera Sur (ECOSUR),Research Institution,"Chetumal, Mexico",18.5001889,-88.296146,,Unknown
+Van Leer Ground Station,Georgia Institute of Technology,University,"Atlanta, Georgia, USA (Georgia Tech Campus)",33.7759943,-84.397137,,Unknown
+University of Sarajevo Ground Station,University of Sarajevo,University,"Sarajevo, Bosnia and Herzegovina",43.8568576,18.4189278,,Yagi-Uda
+USP Tarawa Ground Station,University of the South Pacific,University,"Tarawa, Kiribati",1.4518171,172.9716617,,Yagi-Uda
+UPJS Ground Station,Pavol Jozef Šafárik University in Košice,University,"Košice, Slovakia",48.735755,21.2384843,,Unknown
+HKU Laboratory for Space Research (LSR) Ground Station,University of Hong Kong,University,"Hong Kong University, Hong Kong",22.2830891,114.1365621,,Unknown
+Swiss Optical Ground Station and Geodynamics Observatory Zimmerwald (SwissOGS),Astronomical Institute of the University of Bern (AIUB),University,"Zimmerwald, Switzerland",46.8816986,7.4718342,,Optical Telescope
+CUHK Institute of Space and Earth Information Science (ISEIS) Ground Receiving Station,Chinese University of Hong Kong,University,"Chinese University of Hong Kong, Hong Kong",22.421305,114.2068,,7.5m Antenna
+RISE Ground Station,InSpace Engineering (RISE),Company,"Bucharest, Romania",44.4267674,26.1025384,,Unknown
+Orion Astropreneur Space Academy (OASA) Ground Station,Orion Astropreneur Space Academy (Hong Kong) Limited,Company,"Kowloon, Hong Kong",22.3185673,114.1796057,,Unknown
+"Atlas Portland, Oregon, USA*",ATLAS,Company,"Portland, Oregon, USA*",45.5517776,-122.6628845,"S, X",5.4m
+University of Macau Satellite Ground Station,University of Macau,University,"Taipa, Macau",22.1634311,113.5575308,,Unknown
+University of Dar es Salaam Ground Station (Potential),University of Dar es Salaam,University,"Dar es Salaam, Tanzania",-6.7791817,39.204323,,Unknown
+University of Vaasa Ground Station,University of Vaasa,University,"Vaasa, Finland (Palosaari campus)",63.1049396,21.5933289,,Unknown
+University of Surrey Ground Station (Collaborative),Algerian Space Agency (ASAL) & University of Surrey (Collaboration),University,"Oran, Algeria (Likely Location)",35.6987388,-0.6349319,,Unknown
+NorthBase-1 Ground Station,NorthBase Oy,Company,"Tampere, Finland",61.4971456,23.7525985,"VHF, UHF",Yagi antennas
+"Atlas Obihiro, Japan",ATLAS,Company,"Obihiro, Japan",42.9233354,143.197199,"S, X, Ka",7.3m
+IAC Ground Station,Instituto de Astrofísica de Canarias (IAC),Research Institution,"Tenerife, Canary Islands, Spain",28.2915637,-16.6291304,,Radio Telescope
+IAA Ground Station,Instituto de Astrofísica de Andalucía (IAA),Research Institution,"Granada, Andalusia, Spain",37.1617806,-3.5902299,,Radio Telescope
+NTNU Ground Station,Norwegian University of Science and Technology (NTNU),University,"Trondheim, Norway",63.4305149,10.3950528,,UHF/S-Band
+UiT Narvik Ground Station,UiT The Arctic University of Norway (Narvik Campus),University,"Narvik, Norway",68.436098,17.434807,,Unknown
+IE University Ground Station,IE University,University,"Segovia, Castile and León, Spain",40.9528852,-4.1188364,,Unknown
+IBV Ground Station,Instituto de Biomecánica de Valencia (IBV),Research Institution,"Valencia, Valencian Community, Spain",39.4676566,-0.3443919,,Unknown
+IrbGS Ground Station,IrbGS,Company,"Irbene, Latvia",57.5579092,21.8571504,"S, X",Parabolic Dish
+"Atlas Columbus, Ohio, USA*",ATLAS,Company,"Columbus, Ohio, USA*",39.9888491,-83.1427413,"S, X",5.4m
+Optical Communications Ground Station,Australian National University (ANU),University,"Mt Stromlo, Canberra, ACT",-35.3161616,149.0104742,,Optical Telescope
+Yass Ground Station,UNSW Canberra Space & Cingulan Space,University,"Yass, NSW",-34.8277755,148.9083038,,S-Band and UHF
+Startups Ground Stations (No Specific Found),Spanish Startups (General),Company,"Madrid, Community of Madrid, Spain (Generic Startup Location)",40.4167279,-3.7032905,,Unknown
+Tashkent State Technical University Ground Station,Tashkent State Technical University,University,"Tashkent, Uzbekistan",41.3525405,69.2067382,,Unknown
+Sharif University of Technology,Sharif University of Technology,University,"Tehran, Iran",35.7036491,51.3517033,,Unknown
+COM-FSM Ground Station (Example),College of Micronesia-FSM,University,"Palikir, Pohnpei, Federated States of Micronesia",6.9087761,158.1593972,,Unknown
+"Geophysics Institute, University of Tehran - Esphahan Station",University of Tehran,University,"Esphahan, Esfahan, Iran",32.6538966,51.6659656,,Dobson Spectrometer/Brewer Ozonometer
+GAUSS Srl Ground Station,GAUSS Srl,Company,"Rome, Italy",41.9694879,12.4998006,"UHF, VHF",Yagi Antenna
+Contec Ireland Ground Station,Contec,Company,Ireland (Specific location not specified),53.7797554,-7.3055309,,unknown
+Hypothetical University Ground Station,National University of [Example],University,"Buenos Aires, Argentina (Example)",-34.6036739,-58.3821215,,Unknown
+ITU-CSCRS Ground Station,Istanbul Technical University (ITU),University,"Istanbul, Turkey",41.1022209,29.0260288,,VSAT/Remote Sensing Antenna
+"Atlas Seoul, South Korea*",ATLAS,Company,"Seoul, South Korea*",37.550263,126.9970831,"S, X",5.4m
+NHAZCA S.r.l. Ground Station,NHAZCA S.r.l.,Company,"Rome, Italy",41.9040833,12.5040018,,Synthetic Aperture Radar (SAR)
+Bazoomq Ground Station,Bazoomq Space Research Laboratory,Company,"Yerevan, Armenia",40.2401526,44.5016959,,Unknown
+University of Nottingham Ground Station,University of Nottingham,University,"Nottingham, Nottinghamshire, England, UK",52.9387922,-1.1981057,S,Parabolic Dish
+AAU CubeSat Ground Station,Aalborg University,University,"Aalborg University, Aalborg, Denmark",57.0139858,9.9845553,,Unknown
+Norvegia Research Station,Norwegian Polar Institute,Government Institution,"Nyrøysa, Bouvet Island",-54.4207915,3.3464497,,Unknown
+UTM Ground Station,"University of Technology, Mauritius",University,"La Tour Koenig, Pointe-aux-Sables, Mauritius",-20.1765564,57.4703783,,Unknown
+University of Strathclyde Ground Station ( احتمالی ),University of Strathclyde,University,"Glasgow, Scotland, UK",55.8565757,-4.2571294,,Unknown
+Surrey Space Centre Ground Station,University of Surrey,University,"Guildford, Surrey, England, UK",51.2433916,-0.5881428,"S, X",Parabolic Dish
+Hello Space Ground Station,Hello Space,Company,"Istanbul, Turkey",41.0082376,28.9783589,,Unknown
+Al-Farabi Kazakh National University Ground Station,Al-Farabi Kazakh National University,University,"Almaty, Kazakhstan",43.2252602,76.9225805,,Unknown
+CONTEC Ground Station (Seoul),CONTEC,Company,"Seoul, South Korea",37.5348248,126.9956688,X,Unknown
+DIT Ground Station,Dili Institute of Technology,University,"Dili, Timor-Leste",-8.5667055,125.5443472,,Yagi-Uda
+National Taiwan Ocean University (NTOU) Ground Station,National Taiwan Ocean University (NTOU),University,"Keelung, Taiwan",25.1507696,121.77303,,Yagi antenna
+Kyung Hee University Ground Station,Kyung Hee University,University,"Yongin, South Korea",37.2361653,127.1891246,"S, UHF, VHF",Unknown
+University of Bucharest Ground Station (UHF),University of Bucharest,University,"Bucharest, Romania",44.4356833,26.1018426,,Yagi-Uda
+University of Bucharest Ground Station (S-band),University of Bucharest,University,"Cluj-Napoca, Carpathian Mountains, Romania",46.7712101,23.6236353,S,Parabolic Dish
+University of Alabama Ground Station (Tuscaloosa),University of Alabama,University,"Tuscaloosa, Alabama, USA",33.2114385,-87.5401002,,unknown
+University of South Alabama Ground Station,University of South Alabama,University,"Mobile, Alabama, USA",30.6959406,-88.184236,,unknown
+University of Chile Ground Station,University of Chile,University,"Santiago, Chile",-33.3977867,-70.6562753,,Unknown
+Auburn University Ground Station,Auburn University,University,"Auburn, Alabama, USA",32.6047841,-85.4852488,,unknown
+University Ground Station (Likely),Unspecified University,University,China (Specific location unknown),35.86166,104.195397,,Unknown
+"Atlas Pendergrass, Georgia, USA",ATLAS,Company,"Pendergrass, Georgia, USA",34.1623292,-83.6779473,"S, X",5.4m
+NED University of Engineering and Technology (NED UET),NED University of Engineering and Technology (NED UET),University,Karachi,24.9300102,67.1153478,,unknown
+Cal Poly Earth Stations (PolySat),California Polytechnic State University (Cal Poly),University,"San Luis Obispo, California, USA",35.3025146,-120.6650087,"VHF, UHF, S",Yagi
+USC Space Engineering Research Center (SERC) Ground Station,University of Southern California (USC),University,"Los Angeles, California, USA",34.0206254,-118.2896937,,"4.5 meter dish, Yagi"
+"Atlas Deadhorse, Alaska, USA*",ATLAS,Company,"Deadhorse, Alaska, USA*",70.2001996,-148.4597191,"S, X",5.4m
+Mission Operations Center (MOC),Pennsylvania State University,University,"Pennsylvania State University, State College, PA, USA",40.7982133,-77.8599084,,unknown
+"Atlas Mingenew, Australia*",ATLAS,Company,"Mingenew, Australia*",-29.1901805,115.4420525,"S, X",5.0m
+"Atlas Zallaq, Bahrain*",ATLAS,Company,"Zallaq, Bahrain*",26.0490701,50.4884244,"S, X",5.4m
+Sanya Receiving Station,CNSA,Research Institution,"Sanya, Hainan, China",18.2524799,109.51209,X,Parabolic Dish
+Kunming Receiving Station,CNSA,Space Agency,"Kunming, Yunnan, China",25.01377,102.72383,X,Parabolic Dish
+Tokyo Satellite Station,JAXA,Space Agency,"Tokyo, Japan",35.6812996,139.7670658,"S, X, Ka",Parabolic Dish
+Jiamusi Ground Station,CNSA,Space Agency,"Jiamusi, Heilongjiang, China",46.7997599,130.31882,"S, X",Parabolic Dish
+Nihon University Ground Station,Nihon University,University,"Funabashi Campus, Chiba Prefecture",35.6945485,139.9827277,,"Yagi-Uda Antenna, GP Antenna"
+Dubai Satellite Station,MBRSC,Government Institution,"Dubai, United Arab Emirates",25.2048493,55.2707828,"S, X",Parabolic Dish
+Awarua Satellite Station,SpaceOps NZ,Company,"Awarua, New Zealand",-46.492307,168.3808456,"S, X, Ka",Parabolic Dish
+Azores Satellite Station,ESA,Space Agency,"Azores, Portugal",37.7412488,-25.6755944,"S, X",Parabolic Dish
+Mauritius ISTRAC Ground Station,ISRO,Space Agency,"Port Louis, Mauritius",-20.1608912,57.5012222,"S, X",Parabolic Dish
+Bengaluru ISTRAC Ground Station,ISRO,Space Agency,"Bengaluru, India",13.0341547,77.5124033,"S, X, C",Parabolic Dish
+Romove Ground Station,Romove,Company,"Ventspils, Latvia",57.4088355,21.620621,"S, X",Parabolic Dish
+GLONASS Ground Station - Managua,ROSCOSMOS,Space Agency,"Managua, Nicaragua",12.1149926,-86.2361744,,Not specified
+Misasa Deep Space Station (MDSS),JAXA,Space Agency,"Saku, Nagano Prefecture, Japan",36.2487978,138.47685,"S, X",Cassegrain Antenna with Shaped Reflector
+GARS O’Higgins,DLR,Space Agency,Antarctic Peninsula,-63.3209373,-57.9000592,"S, X",Parabolic Dish
+Usuda Deep Space Center (UDSC),JAXA,Space Agency,"Saku, Nagano Prefecture, Japan",36.1331387,138.362026,"S, X, Ka",Cassegrain Beam-Waveguide Antenna
+Katsuura Tracking and Communications Station,JAXA,Space Agency,"Katsuura, Chiba Prefecture, Japan",35.1522272,140.3208833,X,Parabolic Dish
+Masuda Tracking and Communications Station,JAXA,Space Agency,"Masuda, Kagoshima Prefecture, Japan",30.5693947,131.0091482,,Parabolic Dish
+Daejeon Ground Station,KARI,Space Agency,"Daejeon, South Korea",36.332326,127.434211,"S, X",Parabolic Dish
+Okinawa Tracking and Communications Station,JAXA,Space Agency,"Okinawa Prefecture, Japan",26.5004194,127.9035221,,Parabolic Dish
+SpaceX Boca Chica,SpaceX,Company,"Boca Chica, Texas, USA",25.9971731,-97.1523372,Ka,Phased Array
+Kamisaibara Space Guard Center,JAXA,Space Agency,"Kamisaibara, Okayama Prefecture, Japan",35.312125,133.9413977,,Radar Antenna
+Fuchsstadt Teleport,INTELSAT,Company,"Fuchsstadt, Germany",50.1182766,9.9231034,"C, Ku, Ka",Parabolic Dish
+Micronesia Ground Station,KARI,Space Agency,Micronesia,7.425554,150.550812,"S, X",Parabolic Dish
+Lario Ground Station,EUMETSAT,"<span data-type=""intl_org"" class=""sc-fTmHRu eFxvc""International Organization","Lario, Italy",46.0160486,9.2571676,S,Parabolic Dish
+Elfordstown Earthstation,National Space Centre Ltd.,Company,"Midleton, County Cork, Ireland",51.9534167,-8.1762056,"C, Ku, Ka, S",Parabolic Dish
+Lino Lakes,INMARSAT,Company,"Lino Lakes, USA",45.1602442,-93.0888324,"L, Ka",Parabolic Dish
+BridgeComm Optical Ground Station,"BridgeComm, Inc.",Company,"Denver, Colorado, USA (Likely)",39.7553663,-104.9775024,,Optical
+Riverside Teleport,INTELSAT,Company,"Riverside, California, USA",33.9806005,-117.3754942,"C, Ku, Ka",Parabolic Dish
+SpaceX Merrillan,SpaceX,Company,"Merrillan, Wisconsin, USA",44.4510731,-90.8412561,Ka,Phased Array
+Perth,INMARSAT,Company,"Perth, Australia",-31.9514294,115.8617055,"L, Ka",Parabolic Dish
+"Atlas Kapolei, Hawaii, USA*",ATLAS,Company,"Kapolei, Hawaii, USA*",21.3341183,-158.0823717,"S, X",5.4m
+VIRATEC Ground Station,VIRATEC,Company,"Ventspils, Latvia",57.4088355,21.620621,"S, X",Parabolic Dish
+Surya University Ground Station,Surya University,University,"Tangerang, Indonesia (Likely)",-6.2221045,106.6327248,,Unknown
+Warkworth,INMARSAT,Company,"Warkworth, New Zealand",-36.3995014,174.6676356,"L, Ka",Parabolic Dish
+Purdue Optical Ground Station,Purdue University,University,"West Lafayette, Indiana, USA",40.4237054,-86.9211946,,unknown
+Atlanta Teleport,INTELSAT,Company,"Ellenwood, Georgia, USA",33.609725,-84.2873662,"C, Ku, Ka",Parabolic Dish
+Fillmore Teleport,INTELSAT,Company,"Fillmore, California, USA",34.3991639,-118.918154,"C, Ku, Ka",Parabolic Dish
+SpaceX Molokai,SpaceX,Company,"Molokai, Hawaii, USA",21.1443935,-157.0226297,Ka,Phased Array
+SpaceX Anchorage,SpaceX,Company,"Anchorage, Alaska, USA",61.2175758,-149.8996785,Ka,Phased Array
+SpaceX Dumas,SpaceX,Company,"Dumas, Texas, USA",35.8653789,-101.9732236,Ka,Phased Array
+SpaceX Brownsville,SpaceX,Company,"Brownsville, Texas, USA",25.9017472,-97.4974838,Ka,Phased Array
+SpaceX Brewster,SpaceX,Company,"Brewster, Washington, USA",48.0939928,-119.7873864,Ka,Phased Array
+Santiago SNP,OneWeb,Company,"Santiago, Chile",-33.4488897,-70.6692655,,Parabolic Dish
+Yellowknife SNP,OneWeb,Company,"Yellowknife, Canada",62.4539717,-114.3717886,,Parabolic Dish
+Alaska SNP,OneWeb,Company,"Alaska, USA",63.588753,-154.4930619,,Parabolic Dish
+Tahiti SNP,OneWeb,Company,"Tahiti, French Polynesia",-17.6509195,-149.4260421,,Parabolic Dish
+Piteå SNP,OneWeb,Company,"Piteå, Sweden",65.316698,21.4800364,,Parabolic Dish
+Australia SNP,OneWeb,Company,"Perth, Australia",-31.9513993,115.8616783,,Parabolic Dish
+South Africa SNP,OneWeb,Company,"Cape Town, South Africa",-33.922087,18.4231418,,Parabolic Dish
+"Atlas Accra, Ghana",ATLAS,Company,"Accra, Ghana",5.5592846,-0.1974306,"S, X, Ka",7.3m
+Vietnam SNP,OneWeb,Company,"Hanoi, Vietnam",21.0277644,105.8341598,,Parabolic Dish
+Izhevsk Ground Station,IRIDIUM,Company,"Izhevsk, Russia",56.8618601,53.2324285,"L, Ka",Parabolic Dish
+Chandler Ground Station,IRIDIUM,Company,"Chandler, Arizona, USA",33.3061605,-111.8412502,"L, Ka",Parabolic Dish
+South Korea SNP,OneWeb,Company,"Seoul, South Korea",37.550263,126.9970831,,Parabolic Dish
+Tempe Gateway,IRIDIUM,Company,"Tempe, Arizona, USA",33.4280646,-111.9404185,"L, Ka",Parabolic Dish
+Laurentides,INMARSAT,Company,"Laurentides, Canada",46.6181619,-75.0181493,"L, Ka",Parabolic Dish
+Munich Teleport,SES S.A.,Company,"Munich, Germany",48.1351253,11.5819806,"C, Ku, Ka",Parabolic Dish
+Dubbo Ground Station,SES S.A.,Company,"Dubbo, New South Wales, Australia",-32.2553299,148.619572,Ka,Parabolic Dish
+Belo Horizonte Teleport,Telesat,Company,"Belo Horizonte, Brazil",-19.9266755,-43.9243237,"Ku, Ka",Parabolic Dish
+IFISC Ground Station,IFISC (Institute for Cross-Disciplinary Physics and Complex Systems),Research Institution,"Palma, Balearic Islands, Spain",39.6366609,2.6487696,,Unknown
+Atlas Singapore*,ATLAS,Company,Singapore*,1.3001138,103.8577754,"S, X",5.4m
+Calgary Teleport,Telesat,Company,"Calgary, Alberta, Canada",51.0447331,-114.0718831,"Ku, Ka",Parabolic Dish
+Montreal Teleport,Telesat,Company,"Montreal, Quebec, Canada",45.5018869,-73.5673919,"Ku, Ka",Parabolic Dish
+Betzdorf Teleport,SES S.A.,Company,"Betzdorf, Luxembourg",49.664558,6.3005684,"C, Ku, Ka",Parabolic Dish
+Chilean Ground Station,SES S.A.,Company,"Santiago, Chile",-33.4488897,-70.6692655,Ka,Parabolic Dish
+UAE Ground Station,SES S.A.,Company,"Abu Dhabi, United Arab Emirates",24.345193,54.4955054,Ka,Parabolic Dish
+"Atlas Alice Springs, Australia*",ATLAS,Company,"Alice Springs, Australia*",-23.698042,133.8807471,"S, X, Ka",7.3m
+SkyEdge II-c Hub,Gilat Satellite Networks,Company,Unknown,,,"C, Ku",Parabolic Dish
+Xiamen Ground Station,China Satcom,Company,"Xiamen, China",24.4795099,118.0894799,,
+Hughes San Diego Earth Station,Hughes Network Systems,Company,"San Diego, California, USA",32.7459359,-117.0682658,"C, Ku",Parabolic Dish
+DKET 3421 - X Band,Gilat Satellite Networks,Company,Unknown,,,X,Parabolic Reflector Antenna
+SkyEdge IV Hub,Gilat Satellite Networks,Company,Unknown,,,"Ka, Ku",Parabolic Dish
+Beijing Ground Station,China Satcom,Company,"Beijing, China",39.904211,116.407395,,
+Sanya Ground Station,China Satcom,Government Institution,"Sanya, China",18.2524799,109.51209,,
+Subic Bay Teleport,ABS,Company,"Subic Bay Freeport Zone, Philippines",14.7690037,120.3204873,"C, Ku, Ka",Parabolic Dish
+Cikarang Teleport,ABS,Company,"Cikarang, Indonesia",-6.3079232,107.172085,"C, Ku, Ka",Parabolic Dish
+Nairobi Teleport,ABS,Company,"Nairobi, Kenya",-1.2920659,36.8219462,"C, Ku, Ka",Parabolic Dish
+Changchun Ground Station,China Satcom,Company,"Changchun, China",43.8160199,125.32357,,
+Sioux Falls Ground Station,Planet Labs,Company,"Sioux Falls, South Dakota, USA",43.5460223,-96.731265,X,Parabolic Dish
+Fucino Space Centre,Telespazio,Company,"Ortucchio, Italy",41.9552378,13.6454246,"C, X, Ku, Ka",Various
+Lario Space Centre,Telespazio,Company,"Gera Lario, Italy",46.1585617,9.4089803,Ku,Parabolic Dish
+EDRS Ground Station Weilheim,Airbus Defence and Space,Company,"Weilheim, Germany",47.8451838,11.1432653,Ka,Parabolic Dish
+Gilmore Creek Ground Station,Planet Labs,Company,"Fairbanks, Alaska, USA",64.9461427,-147.4601374,X,Parabolic Dish
+Alice Springs Ground Station,Planet Labs,Company,"Alice Springs, Australia",-23.698042,133.8807471,X,Parabolic Dish
+Kastellaun Ground Station,Airbus Defence and Space,Company,"Kastellaun, Germany",50.0712694,7.4419652,"C, X, P, Ku",Parabolic Dish
+Keflavik Ground Station,Planet Labs,Company,"Keflavik, Iceland",63.9997549,-22.5582716,X,Parabolic Dish
+Glasgow-1,Spire Global,Company,"Glasgow, United Kingdom",55.8616704,-4.2583345,"UHF, S",Yagi-Uda
+UNAH Ground Station,National Autonomous University of Honduras (UNAH),University,"Tegucigalpa, Francisco Morazán, Honduras",14.0829033,-87.1630087,,Unknown
+Antarikchya Pratishan Nepal (APN) Ground Station (Likely),Antarikchya Pratishan Nepal (APN),Other,"Kathmandu, Nepal (Likely)",27.7261902,85.3207729,,Unknown
+UTG Remote Sensing Lab,University of The Gambia,University,"Kanifing, Gambia",13.4604008,-16.6766905,,Yagi-Uda
+"Atlas Pretoria, South Africa",ATLAS,Company,"Pretoria, South Africa",-25.7565723,28.1913815,"S, X, Ka",7.3m
+UiTM Ground Station,Universiti Teknologi MARA (UiTM),University,"Menara 2, Faculty of Electrical Engineering, UiTM Shah Alam",3.0728751,101.4972577,"VHF, UHF",Yagi
+Wallops Ground Station,NASA,Space Agency,"Wallops Island, Virginia, USA",37.9330524,-75.4722501,"VHF, S, X",Parabolic Dish
+Luxembourg-1,Spire Global,Company,"Luxembourg City, Luxembourg",49.6123327,6.1258432,"UHF, S",Yagi-Uda
+Montenegro Space Research Ground Station (Hypothetical),Montenegro Space Research,Company,"Podgorica, Montenegro (Approximate)",42.4304196,19.2593642,,Unknown
+Giuseppe Colombo Center for Space Geodesy,ASI,Space Agency,"Matera, Italy",40.6663601,16.6044454,"X, Ka","Various (e.g., SLR, VLBI, GNSS)"
+Tukwila Ground Station,BlackSky,Company,"Tukwila, WA, USA",47.4748399,-122.2726248,UHF,Yagi Antenna
+"Atlas Cordoba, Argentina",ATLAS,Company,"Cordoba, Argentina",-31.4200833,-64.1887761,"S, X",5.4m
+"Atlas Cape Town, South Africa*",ATLAS,Company,"Cape Town, South Africa*",-33.9209557,18.4149763,"S, X",5.4m
+"Atlas Dubbo, Australia*",ATLAS,Company,"Dubbo, Australia*",-32.2443908,148.614418,"S, X",5.4m
+Tesla Motors Headquarters,SpaceX,Company,"Fremont, California, USA",37.4934792,-121.9451411,Ka,Phased Array
+Santa Maria Station (SMA1),ESA,Space Agency,"Santa Maria, Azores",36.9788003,-25.1059054,"S, X",Parabolic Dish
+"Atlas Punta Arenas, Chile*",ATLAS,Company,"Punta Arenas, Chile*",-53.1633778,-70.907705,"S, X",5.4m
+"Atlas Ushuaia, Argentina",ATLAS,Company,"Ushuaia, Argentina",-54.8076116,-68.3058409,"S, X, Ka",7.3m
+AWS Ground Station - Alaska,AWS,Company,"Alaska, USA",63.588753,-154.4930619,"S, X",AWS Ground Station Antenna
+Cordoba Satellite Station,CONAE,Space Agency,"Cordoba, Argentina",-31.4200833,-64.1887761,"S, X",Parabolic Dish
+KSAT - Hartebeesthoek,KSAT,Company,"Hartebeesthoek, South Africa",-25.6397746,28.0786148,"UHF, L, S, X",KSAT Antenna
+AWS Ground Station - Bahrain,AWS,Company,"Manama, Bahrain",26.2235305,50.5875935,"S, X",AWS Ground Station Antenna
+Earth Observation Center (EOC),JAXA,Space Agency,"Hatoyama, Saitama Prefecture, Japan",36.0030534,139.3491607,,Parabolic Dish
+AWS Ground Station - Cape Town,AWS,Company,"Cape Town, South Africa",-33.922087,18.4231418,"S, X",AWS Ground Station Antenna
+KSAT - Hawaii,KSAT,Company,"Hawaii, USA",19.8986819,-155.6658568,"UHF, L, S, X",KSAT Antenna
+AWS Ground Station - Australia (Dubbo),AWS,Company,"Dubbo, Australia",-32.2443908,148.614418,"S, X",AWS Ground Station Antenna
+AWS Ground Station - Hawaii,AWS,Company,"Hawaii, USA",19.8986819,-155.6658568,"S, X",AWS Ground Station Antenna
+Winnipeg Teleport,Telesat,Company,"Winnipeg, Manitoba, Canada",49.8954221,-97.1385145,"Ku, Ka",Parabolic Dish
+University of Maribor Ground Station,University of Maribor,University,"Maribor, Slovenia",46.559159,15.6433583,"S, X",Parabolic Dish
+Merredin Ground Station,SES S.A.,Company,"Merredin, Western Australia, Australia",-31.4843818,118.2755299,Ka,Parabolic Dish
+AWS Ground Station - Ireland (Dublin),AWS,Company,"Dublin, Ireland",53.3498053,-6.2603097,"S, X",AWS Ground Station Antenna
+AWS Ground Station - Ohio,AWS,Company,"Ohio, USA",41.3129972,-81.9468279,"S, X",AWS Ground Station Antenna
+Cheia Space Centre,Rartel (Telespazio),Company,"Cheia, Romania",45.4581462,25.9382467,"C, Ku",Various
+BlackRay Airborne Terminal,Gilat Satellite Networks,Company,Unknown,,,Ku,Flat Panel
+University of Guyana Ground Station,University of Guyana,University,"Georgetown, Guyana",6.8124181,-58.1178037,,Unknown
+AWS Ground Station - Oregon,AWS,Company,"Oregon, USA",45.3556099,-122.605853,"S, X",AWS Ground Station Antenna
+University of Tartu Ground Station,University of Tartu,University,"Tartu, Estonia",58.3633159,26.7265815,"VHF, UHF",Crossed Yagi-Uda
+San Francisco-1,Spire Global,Company,"San Francisco, USA",37.7935857,-122.3930592,"UHF, S",Yagi-Uda
+AWS Ground Station - Punta Arenas,AWS,Company,"Punta Arenas, Chile",-53.1633778,-70.907705,"S, X",AWS Ground Station Antenna
+AWS Ground Station - Seoul,AWS,Company,"Seoul, South Korea",37.5348248,126.9956688,"S, X",AWS Ground Station Antenna
+Vilnius University Ground Station,Vilnius University,University,"Vilnius, Lithuania",54.6871555,25.2796514,"UHF, VHF",Parabolic Dish
+NASB Ground Station,National Academy of Sciences of Belarus,Research Institution,"Minsk, Belarus",53.92054,27.598327,,Parabolic Dish
+AWS Ground Station - Singapore,AWS,Company,Singapore,1.352083,103.819836,"S, X",AWS Ground Station Antenna
+Bad Aibling Station,Bundesnachrichtendienst (BND),Government Institution,"Bad Aibling, Bavaria, Germany",47.862028,12.004157,,Parabolic Dish
+Egyptian Universities Satellite (EUS-1) Ground Station Network (Potentially),Consortium of Egyptian Universities,University,Various locations across Egypt (17 Universities),30.0272027,31.2085262,,Unknown
+"SSAU System of Positioning, Timing, and Navigation",State Space Agency of Ukraine,Space Agency,"Kyiv, Ukraine",50.4503596,30.5245025,,Parabolic Dish
+Gelsdorf Ground Station,Bundeswehr,Government Institution,"Gelsdorf, Rhineland-Palatinate, Germany",50.5858409,7.0367585,X,Parabolic Dish
+EORIC COSMIC-2 Station,ATLAS,University,"UENR, Sunyani, Ghana",7.3488586,-2.3408388,"S, L, X",3m Fibre
+AWS Ground Station - Stockholm,AWS,Company,"Stockholm, Sweden",59.3060576,18.1089427,"S, X",AWS Ground Station Antenna
+KCST Ground Station,Kuwait College of Science and Technology (KCST),University,"Doha District, Al Asimah Governate, Kuwait",29.3247985,47.7895091,,"Not specified, likely for NanoSat communication"
+EORIC EOS-DB Station,EORIC/UENR,University,"UENR, Sunyani, Ghana",7.3488586,-2.3408388,"L, X",2.4m Az/El
+EORIC C-Band Eutelsat Station,EORIC/UENR,University,"UENR, Sunyani, Ghana",7.3488586,-2.3408388,C,3m Mesh
+UENR GNSS Station,UENR/UCAR,University,"UENR, Sunyani, Ghana",7.3517119,-2.3444138,L,GNSS Patch
+University of Alabama in Huntsville (UAH) Ground Station,University of Alabama in Huntsville,University,"Huntsville, Alabama, USA",34.7251407,-86.6397853,S,unknown
+LASP Ground Station,"University of Colorado Boulder, Laboratory for Atmospheric and Space Physics (LASP)",University,"Boulder, Colorado, USA",40.047563,-105.2805234,UHF,Cross Yagi
+KSAT - Awarua,KSAT,Company,"Awarua, New Zealand",-46.492307,168.3808456,"UHF, L, S, X, Ka",KSAT Antenna
+KSAT - Azores,KSAT,Company,Azores,37.7412488,-25.6755944,"UHF, L, S, X",KSAT Antenna
+USF Institute for Marine Remote Sensing (IMaRS) Ground Station,University of South Florida,University,"St. Petersburg, Florida, USA (Approximate)",27.7624407,-82.6354867,,Unknown
+KSAT - Bangalore,KSAT,Company,"Bangalore, India",12.9712664,77.5842031,"UHF, L, S, X",KSAT Antenna
+KSAT - Bel Ombre,KSAT,Company,"Bel Ombre, Mauritius",-20.5044752,57.4117873,"UHF, L, S, X",KSAT Antenna
+SnT Ground Station,University of Luxembourg,University,"Luxembourg City, Luxembourg",49.5987519,6.1263957,UHF,Unknown
+KSAT - Cordoba,KSAT,Company,"Cordoba, Argentina",-31.4200833,-64.1887761,"UHF, S, X",KSAT Antenna
+KSAT - Dubai,KSAT,Company,"Dubai, United Arab Em.",25.2048493,55.2707828,"UHF, S, X",KSAT Antenna
+KSAT - Fairbanks,KSAT,Company,"Fairbanks, USA",64.8400511,-147.7199756,"UHF, L, S, X",KSAT Antenna
+Husky Satellite Lab Ground Station,University of Washington,University,"University of Washington, Seattle, Washington, USA",47.6503177,-122.3016101,,Unknown
+Satellite Development Center (CDS) Ground Station,Satellite Development Center (CDS),Research Institution,"Oran, Algeria",35.6987388,-0.6349319,,Unknown
+KSAT - Hokkaido,KSAT,Company,"Hokkaido, Japan",43.2203266,142.8634737,"UHF, S, X",KSAT Antenna
+KSAT - Inuvik,KSAT,Company,"Inuvik, Canada",68.3593674,-133.7294462,"UHF, L, S, X",KSAT Antenna
+KSAT - Jan Mayen,KSAT,Company,"Jan Mayen, Norway",60.472024,8.468946,"UHF, S, X",KSAT Antenna
+AgriTech Startup Ground Station,Hypothetical AgriTech Startup,Company,"Tacuarembó, Uruguay",-31.7182047,-55.9799911,,Unknown
+KSAT - Jeju,KSAT,Company,"Jeju, South Korea",33.5042779,126.519838,"UHF, L, S, X",KSAT Antenna
+KSAT - Kourou,KSAT,Company,"Kourou, French Guiana",5.1573958,-52.6430108,"UHF, L, S, X",KSAT Antenna
+KSAT - Long Beach,KSAT,Company,"Long Beach, USA",33.7700504,-118.1937395,"UHF, L, S, X",KSAT Antenna
+KSAT - Maspalomas,KSAT,Company,"Maspalomas, Spain",27.7605619,-15.5860172,"UHF, L, S, X",KSAT Antenna
+FUSE Ground Station,University of Puerto Rico - Mayaguez,University,"Mayaguez, Puerto Rico",18.200345,-67.1179511,,Parabolic Dish
+University of Malta Ground Station,University of Malta,University,"Valletta, Malta",35.8983722,14.5154801,,Unknown
+Georgia Tech S-Band Satellite Ground Station,Georgia Institute of Technology,University,"Atlanta, Georgia, USA (Georgia Tech Campus)",33.7779791,-84.3979638,S,Unknown
+KSAT - Miami,KSAT,Company,"Miami, USA",25.7616798,-80.1917902,"UHF, L, S, X",KSAT Antenna
+KSAT - Nemea,KSAT,Company,"Nemea, Greece",37.82133,22.660998,"UHF, L, S, X",KSAT Antenna
+KSAT - Nuuk,KSAT,Company,"Nuuk, Greenland",64.1743234,-51.7372787,"UHF, S, X",KSAT Antenna
+KSAT - Okinawa,KSAT,Company,"Okinawa, Japan",26.1201911,127.7025012,"UHF, S, X",KSAT Antenna
+Institute of Aeronautics and Space Studies Ground Station,"Institute of Aeronautics and Space Studies, University of Blida",University,"Blida, Algeria",36.5012334,2.878057,,Unknown
+KSAT - Peterborough,KSAT,Company,"Peterborough, Australia",-32.9732813,138.8379313,"UHF, L, S, X",KSAT Antenna
+KSAT - Prudhoe Bay,KSAT,Company,"Prudhoe Bay, USA",70.2268843,-148.400021,"UHF, S, X",KSAT Antenna
+KSAT - Puertollano,KSAT,Company,"Puertollano, Spain",38.6884458,-4.1078877,"UHF, L, S, X",KSAT Antenna
+KSAT - Punta Arenas,KSAT,Company,"Punta Arenas, Chile",-53.1633778,-70.907705,"UHF, L, S, X",KSAT Antenna
+BDRI Ground Station,Bottlenose Dolphin Research Institute BDRI,Research Institution,"O Grove, Galicia, Spain",42.4902487,-8.8580837,,Unknown
+KSAT - Singapore,KSAT,Company,Singapore,1.352083,103.819836,"UHF, L, S, X",KSAT Antenna
+KSAT - Svalbard,KSAT,Company,"Svalbard, Norway",77.8749725,20.9751822,"UHF, L, S, X",KSAT Antenna
+Stellar Project Optical Ground Station,Stellar Project,Company,"Padua, Italy",45.4123261,11.8938136,,Optical Communication Terminal
+Prudhoe Bay Ground Station,BlackSky,Company,"Prudhoe Bay, AK, USA",70.2268843,-148.400021,"UHF, S, X",Parabolic Dish
+KSAT - Thermopylae,KSAT,Company,"Thermopylae, Greece",38.8,22.5333333,"UHF, L, S, X",KSAT Antenna
+"KSAT - Thornton (Macon, GA)",KSAT,Company,"Thornton, USA",32.8362271,-83.6320478,"UHF, L, S, X",KSAT Antenna
+KSAT - Tokyo,KSAT,Company,"Tokyo, Japan",35.6803997,139.7690174,"UHF, S, X",KSAT Antenna
+Wsense S.r.l. Ground Station,Wsense S.r.l.,Company,"Rome, Italy",41.9111508,12.49584,,Software-Defined Radio (SDR)
+KSAT - Tolhuin,KSAT,Company,"Tolhuin, Argentina",-54.5108893,-67.1929895,"UHF, S, X",KSAT Antenna
+KSAT - Troll,KSAT,Company,"Troll, Antarctica",-72.011389,2.535,"L, S, X",KSAT Antenna
+Comenius University Ground Station,Comenius University in Bratislava,University,"Bratislava, Slovakia",48.1485965,17.1077477,,Unknown
+KSAT - Tromso,KSAT,Company,"Tromso, Norway",69.6613981,18.9412952,"L, S, X",KSAT Antenna
+KSAT - Tuskuba,KSAT,Company,"Tuskuba, Japan",36.0835255,140.0764454,"L, S, X",KSAT Antenna
+KSAT - Vardo,KSAT,Company,"Vardo, Norway",70.3706399,31.1095471,"L, S, X",KSAT Antenna
+SNUGLITE Ground Station,Seoul National University,University,"Seoul National University, Seoul, South Korea",37.48121,126.952712,,Amateur Satellite Transceiver
+KSAT - Weilheim,KSAT,Company,"Weilheim, Germany",47.8422367,11.1427463,"L, S, X",KSAT Antenna
+KSAT - Accra,KSAT,Company,"Accra, Ghana",5.5592846,-0.1974306,"L, S, X",KSAT Antenna
+KSAT - Brasilia,KSAT,Company,"Brasilia, Brazil",-15.7975154,-47.8918874,"L, S, X",KSAT Antenna
+KSAT - Longovilo,KSAT,Company,"Longovilo, Chile",-33.9537359,-71.4017822,"L, S, X",KSAT Antenna
+KSAT - Maine,KSAT,Company,"Maine, USA",46.820278,-67.9235431,"L, S, X",KSAT Antenna
+SDR Ground Station,Pennsylvania State University,University,"Pennsylvania State University, USA",40.7982133,-77.8599084,,unknown
+KSAT - New Mexico,KSAT,Company,"New Mexico, USA",34.9727305,-105.0323635,"L, S, X",KSAT Antenna
+Tecno Society Ground Station,"Tecno Society, LDA",Company,"Luanda, Angola",-8.8146556,13.2301756,,Unknown
+Constellation Technologies & Operations Ground Station Prototype,Constellation Technologies & Operations,Company,"Saint-Quentin-en-Yvelines and Toulouse, France",43.6048462,1.442848,,unknown
+Toluca SNP,OneWeb,Company,"Toluca, Mexico",19.2826098,-99.6556653,,Parabolic Dish
+Spaceport America Ground Station,BlackSky,Company,"Truth or Consequences, NM, USA",32.9901482,-106.9750699,"UHF, S, X",Parabolic Dish
+TU Delft Ground Station,Delft University of Technology,University,"Delft, Netherlands (EWI Building Roof)",51.9988354,4.3734888,,Tracking VHF/UHF/S-band antennas
+ISS Reshetnev Ground Station,Information Satellite Systems Reshetnev,Company,"Zheleznogorsk, Russia",56.2606585,93.5341159,,Parabolic Dish
+SSAU Space Monitoring and Analysis System,State Space Agency of Ukraine,Space Agency,"Kyiv, Ukraine",50.4503596,30.5245025,,Parabolic Dish
+MAI Ground Station,Moscow Aviation Institute,University,"Moscow, Russia",55.8101569,37.5014539,"X, S",Parabolic Dish
+Lustbühel Observatory SLR Station,"Space Research Institute (IWF), Austrian Academy of Sciences",Research Institution,"Graz, Austria",47.0688259,15.4932081,,Laser Ranging Telescope
+University of Khartoum Educational Ground Station,University of Khartoum,University,"Khartoum, Sudan",15.6098211,32.5424286,,unknown
+KSAT - San Jose,KSAT,Company,"San Jose, Costa Rica",9.9280694,-84.0907246,"L, S, X",KSAT Antenna
+Abu Dhabi Quantum Optical Ground Station (ADQOGS),Technology Innovation Institute (TII),Research Institution,"Al Wathba, Abu Dhabi, UAE",24.177209,54.685597,,Tracking Telescope
+Pisgah Astronomical Research Institute (PARI),Pisgah Astronomical Research Institute,Research Institution,"Rosman, North Carolina, USA",35.1989792,-82.8724423,,Parabolic Dish
+University of Virginia Ground Station (UVGS),University of Virginia,University,"Charlottesville, Virginia, USA",38.0335529,-78.5079772,,Yagi-Uda
+Morehead State University 21-Meter Space Tracking Antenna,Morehead State University,University,"Morehead, Kentucky, USA",38.18943,-83.4310035,"L, S, C, X, Ku",Parabolic Dish
+LeafSpace - Absheron,LeafSpace,Company,"Absheron, Azerbaijan",40.452345,49.7437452,"L, S, X",LeafSpace Antenna
+SaRC Ground Station,"Satellite Research Centre (SaRC), Nanyang Technological University (NTU)",University,Nanyang Technological University (NTU),1.34729,103.6807359,"S, X",UHF/VHF
+SWISSto12 Ground Station Network (Potential),SWISSto12,Company,"Lausanne, Switzerland (SWISSto12 Headquarters)",46.5443101,6.5876884,,Unknown
+AURAK Satellite Ground Station,American University of Ras Al Khaimah (AURAK),University,"Ras Al Khaimah, UAE",25.7874682,55.9935552,,Unknown
+Midlands State University Ground Station,Midlands State University,University,"Gweru, Zimbabwe",-19.4845308,29.8352841,,unknown
+USP Tonga Campus Ground Station,University of the South Pacific - Tonga Campus,University,"Nuku'alofa, Tonga",-21.1847034,-175.2200953,,VSAT
+National University of Equatorial Guinea (UNGE) - Potential Ground Station,Universidad Nacional de Guinea Ecuatorial (UNGE),University,"Malabo, Equatorial Guinea",3.7469873,8.774597,,Unknown
+"University of Belgrade, Faculty of Electrical Engineering Ground Station (Potential)","University of Belgrade, Faculty of Electrical Engineering",University,"Belgrade, Serbia",44.8055056,20.4761359,,Unknown
+RAL Space Ground Station (Chilbolton Observatory),RAL Space,Research Institution,"Chilbolton, Hampshire, England, UK",51.145382,-1.4389975,"S, X",Parabolic Dish
+CesiumAstro Ground Station (Likely),CesiumAstro,Company,"Texas, USA",31.9685988,-99.9018131,,unknown
+LeafSpace - Awarua,LeafSpace,Company,"Awarua, New Zealand",-46.492307,168.3808456,"L, S, X, Ka",LeafSpace Antenna
+Kerguelen Station,CNES,Space Agency,"Kerguelen Islands, French Southern and Antarctic Lands",-49.3948275,69.3544626,"S, X",Parabolic Dish
+Malargüe Station (MLG1),ESA,Space Agency,"Malargüe, Argentina",-35.484462,-69.5797495,"S, X, Ka",Parabolic Dish
+LeafSpace - Blondous,LeafSpace,Company,"Blondous, Iceland",65.6592902,-20.2849542,"L, S, X",LeafSpace Antenna
+LeafSpace - Jeju,LeafSpace,Company,"Jeju, South Korea",33.5042779,126.519838,"L, S, X",LeafSpace Antenna
+LeafSpace - Kandy,LeafSpace,Company,"Kandy, Sri Lanka",7.2905715,80.6337262,"L, S, X",LeafSpace Antenna
+LeafSpace - Kaspichan,LeafSpace,Company,"Kaspichan, Bulgaria",43.3112179,27.1575938,"UHF, S, X",LeafSpace Antenna
+Tolhuin Satellite Station,CONAE,Space Agency,"Tolhuin, Argentina",-54.5108893,-67.1929895,"S, X",Parabolic Dish
+ESOC-1,ESA,Space Agency,"Darmstadt, Germany (ESOC)",49.8708073,8.6227563,"S, X",Parabolic Dish
+LeafSpace - La Paz,LeafSpace,Company,"La Paz, Mexico",24.1426408,-110.3127531,"L, S, X",LeafSpace Antenna
+LeafSpace - Lomazzo,LeafSpace,Company,"Lomazzo, Italy",45.6970894,9.0347524,"UHF, S, X",LeafSpace Antenna
+Neuquén Ground Station,CNSA,Space Agency,"Neuquén, Argentina",-38.9516784,-68.0591888,"S, X",Parabolic Dish
+LeafSpace - Mon Loisir,LeafSpace,Company,"Mon Loisir, Mauritius",-20.1214445,57.6849966,"L, S, X",LeafSpace Antenna
+LeafSpace - Nangetty,LeafSpace,Company,"Nangetty, Australia",-29.0386397,115.4150947,"L, S, X",LeafSpace Antenna
+LeafSpace - Peterborough,LeafSpace,Company,"Peterborough, Australia",-32.9732813,138.8379313,"L, S, X",LeafSpace Antenna
+Thiruvananthapuram ISTRAC Ground Station,ISRO,Space Agency,"Thiruvananthapuram, India",8.5241391,76.9366376,"S, X, C",Parabolic Dish
+LeafSpace - Pleven,LeafSpace,Company,"Pleven, Bulgaria",43.4170423,24.6066847,"L, S, X",LeafSpace Antenna
+LeafSpace - Pretoria,LeafSpace,Company,"Pretoria, South Africa",-25.7565723,28.1913815,"L, S, X",LeafSpace Antenna
+Svalbard Ground Station,KARI,Space Agency,"Svalbard, Norway",77.8749725,20.9751822,"S, X",Parabolic Dish
+LeafSpace - Puertrollano,LeafSpace,Company,"Puertrollano, Spain",38.6884458,-4.1078877,"L, S, X",LeafSpace Antenna
+LeafSpace - Punta Arenas,LeafSpace,Company,"Punta Arenas, Chile",-53.1633778,-70.907705,"L, S, X, Ka",LeafSpace Antenna
+SpaceX Fairbanks,SpaceX,Company,"Fairbanks, Alaska, USA",64.8400511,-147.7199756,Ka,Phased Array
+LeafSpace - Santa Maria,LeafSpace,Company,"Santa Maria, Azores",34.9530337,-120.4357191,"UHF, L, S, X",LeafSpace Antenna
+LeafSpace - Unst,LeafSpace,Company,"Unst, United Kingdom",60.7416304,-0.9048549,"UHF, L, S, X",LeafSpace Antenna
+LeafSpace - Vimercate,LeafSpace,Company,"Vimercate, Italy",45.6158909,9.3684192,"UHF, S, X",LeafSpace Antenna
+LeafSpace - Longwood,LeafSpace,Company,"Longwood, St Helena",-15.950823,-5.6886443,"S, X",LeafSpace Antenna
+California SNP,OneWeb,Company,"California, USA",36.778261,-119.4179324,,Parabolic Dish
+Tabuk SNP,OneWeb,Company,"Tabuk, Saudi Arabia",28.3835079,36.5661908,,Parabolic Dish
+LeafSpace - Maui,LeafSpace,Company,"Maui, USA",20.7983626,-156.3319253,"L, S, X",LeafSpace Antenna
+LeafSpace - Monagee (Monzón),LeafSpace,Company,"Monagee, Spain",41.9157645,0.1928216,"L, S, X, Ka",LeafSpace Antenna
+Arica SNP,OneWeb,Company,"Arica, Chile",-18.4782534,-70.3125988,,Parabolic Dish
+Svalbard SNP,OneWeb,Company,"Svalbard, Norway",77.8749725,20.9751822,,Parabolic Dish
+Cyprus SNP,OneWeb,Company,"Nicosia, Cyprus",35.1855659,33.3822764,,Parabolic Dish
+Japan SNP,OneWeb,Company,"Tokyo, Japan",35.6764225,139.650027,,Parabolic Dish
+LeafSpace - Nova Scotia,LeafSpace,Company,"Nova Scotia, Canada",45.0778473,-63.5466822,"L, S, X",LeafSpace Antenna
+LeafSpace - Santiago,LeafSpace,Company,"Santiago, Chile",-33.4488897,-70.6692655,"L, S, X",LeafSpace Antenna
+LeafSpace - Talkeetna,LeafSpace,Company,"Talkeetna, USA",62.3209046,-150.1066221,"L, S, X",LeafSpace Antenna
+LeafSpace - Utqiagvik,LeafSpace,Company,"Utqiagvik, USA",71.2905556,-156.7886111,"L, S, X",LeafSpace Antenna
+Sunset Beach Teleport,SES S.A.,Company,"Sunset Beach, Oahu, Hawaii, USA",21.6742181,-158.0402232,"C, Ku, Ka",Parabolic Dish
+"Viasat - Pendergrass, GA (PGG)",Viasat,Company,"Pendergrass, GA, USA",34.1623292,-83.6779473,S,Viasat RTE Antenna
+Viasat - Guildford (GDD),Viasat,Company,"Guildford, UK",51.23622,-0.570409,S,Viasat RTE Antenna
+"Viasat - Alice Springs (ASP01, ASP02)",Viasat,Company,"Alice Springs, AU",-23.698042,133.8807471,"S, Ka",Viasat RTE Antenna
+Thermopylae Ground Station,SES S.A.,Company,"Thermopylae, Greece",38.8,22.5333333,Ka,Parabolic Dish
+Phoenix Ground Station,SES S.A.,Company,"Phoenix, Arizona, USA",33.4268091,-112.0641712,Ka,Parabolic Dish
+Rugby Ground Station,SES S.A.,Company,"Rugby, United Kingdom",52.3786315,-1.25081,"C, Ku, Ka",Parabolic Dish
+Viasat - Accra (ACC),Viasat,Company,"Accra, Ghana",5.6060955,-0.1681235,"S, Ka",Viasat RTE Antenna
+Viasat - Cordoba (COR),Viasat,Company,"Cordoba, AR",-31.3155152,-64.2136596,S,Viasat RTE Antenna
+Viasat - Öjebyn (OJY),Viasat,Company,"Öjebyn, Sweden",65.342949,21.3968857,"S, Ka",Viasat RTE Antenna
+Viasat - Pretoria (PRY),Viasat,Company,"Pretoria, South Africa",-25.6574816,28.2147556,"S, Ka",Viasat RTE Antenna
+Viasat - Obihiro (OBO),Viasat,Company,"Obihiro, Japan",42.7312617,143.2177738,"S, Ka",Viasat RTE Antenna
+Viasat - Shimoji-shima (SHI),Viasat,Company,"Shimoji-shima, Japan",24.8183207,125.1543783,"S, Ka",Viasat RTE Antenna
+Thaicom Teleport Center,Thaicom,Company,"Pathum Thani, Thailand",14.0849535,100.4213891,"C, Ku",Parabolic Dish
+Viasat - North Pole (NTP01),Viasat,Company,North Pole Alaska USA,64.7552465,-147.353425,"S, Ka",Viasat RTE Antenna
+Viasat - Canada (YEV),Viasat,Company,Canada (Inuvik),68.3062128,-133.4975237,"S, Ka",Viasat RTE Antenna
+Port Louis Teleport,ABS,Company,"Port Louis, Mauritius",-20.1608912,57.5012222,"C, Ku, Ka",Parabolic Dish
+Xi'an Ground Station,China Satcom,Company,"Xi'an, China",34.21662,109.09728,,
+Weinan Ground Station,China Satcom,Company,"Weinan, China",34.4999699,109.51015,,
+Benavidez Teleport,Telespazio,Company,"Benavidez, Argentina",-34.4151715,-58.6867547,"C, Ku",Various
+Nanning Ground Station,China Satcom,Company,"Nanning, China",22.8167299,108.3669,,
+Scanzano Space Centre,Telespazio,Company,"Palermo, Italy",38.1200459,13.3229958,"C, Ku, Ka",Various
+Boulder-1,Spire Global,Company,"Boulder, USA",40.0164221,-105.279267,"UHF, S",Yagi-Uda
+Redu Station (RED1),ESA,Space Agency,"Redu, Belgium",50.0075195,5.1597629,"S, X, Ka",Parabolic Dish
+SpaceX Arbuckle,SpaceX,Company,"Arbuckle, California, USA",39.0239491,-122.0645437,Ka,Phased Array
+Redmond Ground Station,BlackSky,Company,"Redmond, WA, USA",47.6739881,-122.121512,"S, X",Parabolic Dish
+MXL Ground Station (University of Michigan),University of Michigan - Michigan Exploration Laboratory (MXL),University,"Ann Arbor, Michigan, USA",42.277145,-83.7382071,,Yagi-Uda
+UNAM Ground Station,Universidad Nacional Autónoma de México (UNAM),University,"Mexico City, Mexico",19.332795,-99.1876103,,S/X-band
+University of Nairobi Ground Station,University of Nairobi,University,"Nairobi, Kenya",-1.2777341,36.8124098,"UHF, VHF",Unknown
+RAL Space Ground Station (Rutherford Appleton Laboratory),RAL Space,Research Institution,"Harwell, Oxfordshire, England, UK",51.576477,-1.3102346,"S, X",Parabolic Dish
+University of Jordan Ground Station (Likely for Atmospheric Research),University of Jordan,University,"Amman, Jordan, Department of Physics, University of Jordan",32.012632,35.874172,,Unknown
+UNal Geophysics Group Station,Universidad Nacional de Colombia (UNal),University,"Marambio Base, Antarctica (Colombian Geophysical station engineered and built by UNal)",-64.2410801,-56.6250159,,unknown
+ESOC-2,ESA,Space Agency,"Darmstadt, Germany (ESOC)",49.8708073,8.6227563,UHF,Polarized Antenna
+White Sands Ground Station,NASA,Space Agency,"White Sands, New Mexico, USA",32.3842202,-106.491868,"S, X, Ka",Parabolic Dish
+Alaska 1,ASF,University,"Alaska, USA",61.8009332,-147.5600029,"S, X",Parabolic Dish
+Kiruna Station (KIR1),ESA,Space Agency,"Kiruna, Sweden",67.8683523,20.1994826,"S, X",Parabolic Dish
+Weilheim Ground Station,DLR,Space Agency,"Weilheim, Germany",47.8451838,11.1432653,"S, X, Ka",Parabolic Dish

@@ -1,0 +1,10 @@
+ssc_clewiston_satellite_station,26.7542312,-80.9336753,0.0,5.0
+ssc_esrange_space_center_satellite_station,67.8557995,20.2252821,0.0,5.0
+ssc_inuvik_satellite_station,68.3190626,-133.5448400,0.0,5.0
+ssc_north_pole_satellite_station,64.7552465,-147.3534250,0.0,5.0
+ssc_punta_arenas_satellite_station,-53.1633778,-70.9077050,0.0,5.0
+ssc_santiago_satellite_station,-33.1499660,-70.6673880,0.0,5.0
+ssc_siracha_satellite_station,13.1012434,100.9281324,0.0,5.0
+ssc_south_point_satellite_station,18.9136111,-155.6833332,0.0,5.0
+ssc_western_australia_space_center_wasc,-29.2451319,114.9326021,0.0,5.0
+ssc_stockholm_teleport_station,59.2123224,18.0836830,0.0,5.0

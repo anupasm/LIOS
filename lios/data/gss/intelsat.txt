@@ -1,0 +1,6 @@
+hagerstown_teleport,39.6417629,-77.7199932,0.0,5.0
+castle_rock_teleport,39.3788787,-104.8560901,0.0,5.0
+fuchsstadt_teleport,50.1182766,9.9231034,0.0,5.0
+riverside_teleport,33.9806005,-117.3754942,0.0,5.0
+atlanta_teleport,33.6097250,-84.2873662,0.0,5.0
+fillmore_teleport,34.3991639,-118.9181540,0.0,5.0

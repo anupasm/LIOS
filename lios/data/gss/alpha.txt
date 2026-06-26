@@ -1,5 +1,0 @@
-alpha-Boca_Chica,25.99,-97.15
-alpha-Merritt_Island,28.45,-80.56
-alpha-Redmond,47.67,-122.12
-alpha-London,51.50,-0.12
-alpha-Sydney,-33.87,151.21

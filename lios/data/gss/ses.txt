@@ -1,0 +1,16 @@
+woodbine_teleport,39.3686877,-77.0569484,0.0,5.0
+perth_teleport,-31.9514294,115.8617055,0.0,5.0
+diekirch_ground_station,49.8645595,6.1528557,0.0,5.0
+gandoul_ground_station,14.4974010,-14.4523620,0.0,5.0
+hawley_teleport,41.4759224,-75.1821189,0.0,5.0
+goonhilly_earth_station,50.0481728,-5.1810449,0.0,5.0
+munich_teleport,48.1351253,11.5819806,0.0,5.0
+dubbo_ground_station,-32.2553299,148.6195720,0.0,5.0
+betzdorf_teleport,49.6645580,6.3005684,0.0,5.0
+chilean_ground_station,-33.4488897,-70.6692655,0.0,5.0
+uae_ground_station,24.3451930,54.4955054,0.0,5.0
+merredin_ground_station,-31.4843818,118.2755299,0.0,5.0
+sunset_beach_teleport,21.6742181,-158.0402232,0.0,5.0
+thermopylae_ground_station,38.8000000,22.5333333,0.0,5.0
+phoenix_ground_station,33.4268091,-112.0641712,0.0,5.0
+rugby_ground_station,52.3786315,-1.2508100,0.0,5.0

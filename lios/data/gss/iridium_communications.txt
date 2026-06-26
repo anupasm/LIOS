@@ -1,0 +1,7 @@
+yellowknife_ground_station,62.4539717,-114.3717886,0.0,5.0
+iqaluit_ground_station,63.7570222,-68.5450017,0.0,5.0
+punta_arenas_ground_station,-53.1633778,-70.9077050,0.0,5.0
+wahiawa_ground_station,21.4959617,-158.0297748,0.0,5.0
+izhevsk_ground_station,56.8618601,53.2324285,0.0,5.0
+chandler_ground_station,33.3061605,-111.8412502,0.0,5.0
+tempe_gateway,33.4280646,-111.9404185,0.0,5.0

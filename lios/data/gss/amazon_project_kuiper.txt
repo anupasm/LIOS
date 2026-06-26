@@ -1,0 +1,13 @@
+uisek_amazon_scientific_station,-0.4116475,-76.6253865,0.0,5.0
+aws_ground_station_alaska,63.5887530,-154.4930619,0.0,5.0
+aws_ground_station_bahrain,26.2235305,50.5875935,0.0,5.0
+aws_ground_station_cape_town,-33.9220870,18.4231418,0.0,5.0
+aws_ground_station_australia_dubbo,-32.2443908,148.6144180,0.0,5.0
+aws_ground_station_hawaii,19.8986819,-155.6658568,0.0,5.0
+aws_ground_station_ireland_dublin,53.3498053,-6.2603097,0.0,5.0
+aws_ground_station_ohio,41.3129972,-81.9468279,0.0,5.0
+aws_ground_station_oregon,45.3556099,-122.6058530,0.0,5.0
+aws_ground_station_punta_arenas,-53.1633778,-70.9077050,0.0,5.0
+aws_ground_station_seoul,37.5348248,126.9956688,0.0,5.0
+aws_ground_station_singapore,1.3520830,103.8198360,0.0,5.0
+aws_ground_station_stockholm,59.3060576,18.1089427,0.0,5.0

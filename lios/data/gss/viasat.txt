@@ -1,0 +1,11 @@
+viasat_pendergrass_ga_pgg,34.1623292,-83.6779473,0.0,5.0
+viasat_guildford_gdd,51.2362200,-0.5704090,0.0,5.0
+viasat_alice_springs_asp01_asp02,-23.6980420,133.8807471,0.0,5.0
+viasat_accra_acc,5.6060955,-0.1681235,0.0,5.0
+viasat_cordoba_cor,-31.3155152,-64.2136596,0.0,5.0
+viasat_jebyn_ojy,65.3429490,21.3968857,0.0,5.0
+viasat_pretoria_pry,-25.6574816,28.2147556,0.0,5.0
+viasat_obihiro_obo,42.7312617,143.2177738,0.0,5.0
+viasat_shimoji_shima_shi,24.8183207,125.1543783,0.0,5.0
+viasat_north_pole_ntp01,64.7552465,-147.3534250,0.0,5.0
+viasat_canada_yev,68.3062128,-133.4975237,0.0,5.0

@@ -1,0 +1,8 @@
+port_blair_istrac_ground_station,11.6233774,92.7264828,0.0,5.0
+sriharikota_istrac_ground_station,13.7330556,80.2047222,0.0,5.0
+bangalore_satellite_station,12.9524713,77.5436302,0.0,5.0
+biak_istrac_ground_station,-1.1605052,136.0506566,0.0,5.0
+lucknow_istrac_ground_station,26.9485309,80.9705292,0.0,5.0
+mauritius_istrac_ground_station,-20.1608912,57.5012222,0.0,5.0
+bengaluru_istrac_ground_station,13.0341547,77.5124033,0.0,5.0
+thiruvananthapuram_istrac_ground_station,8.5241391,76.9366376,0.0,5.0
