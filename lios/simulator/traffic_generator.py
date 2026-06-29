@@ -15,11 +15,26 @@ from __future__ import annotations
 import math
 import random
 from dataclasses import dataclass
-from typing import Dict, List, Mapping, Optional
+from typing import Dict, List, Mapping, Optional, Sequence
 from uuid import UUID
 
 from config import cfg
 from contact_plan.window_calculator import Contact, ContactPlan
+
+
+def constellation_size_weights(
+    operator_constellations: Mapping[str, Sequence[object]],
+) -> dict[str, float]:
+    """Return normalized operator weights proportional to satellite counts."""
+    total_satellites = sum(
+        len(satellites) for satellites in operator_constellations.values()
+    )
+    if total_satellites <= 0:
+        raise ValueError("cannot derive operator weights without satellites")
+    return {
+        operator: len(satellites) / total_satellites
+        for operator, satellites in operator_constellations.items()
+    }
 
 
 @dataclass

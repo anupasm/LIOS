@@ -3,10 +3,10 @@
 
 Artifacts:
   cp_24h_step{step}_range{range}.csv
-  tf_pair_v2_d{bias}_w{weights}_24h_s{seed}_r{rate}_step{step}_range{range}.json
+  tf_pair_v2_e{epoch}_d{bias}_w{weights}_24h_s{seed}_r{rate}_step{step}_range{range}.json
 
 Traffic generation does not calculate routes. Each global Poisson arrival is
-allocated to a cross-operator ISL pair using configured source-operator weights.
+allocated to a cross-operator ISL pair using constellation-size source weights.
 """
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ import sys
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Mapping
 
 _LIOS_DIR = Path(__file__).parent / "lios"
 sys.path.insert(0, str(_LIOS_DIR))
@@ -27,9 +27,14 @@ from config import cfg
 from contact_plan.gs_loader import GSLoader
 from contact_plan.tle_loader import TLELoader
 from contact_plan.window_calculator import ContactPlan, WindowCalculator
-from simulator.traffic_generator import TrafficFlow, TrafficGenerator
+from precompute import CONTACT_PLAN_EPOCH, contact_plan_epoch_key
+from simulator.traffic_generator import (
+    TrafficFlow,
+    TrafficGenerator,
+    constellation_size_weights,
+)
 
-EPOCH = datetime(2026, 6, 14, 0, 0, 0, tzinfo=timezone.utc)
+EPOCH = CONTACT_PLAN_EPOCH
 DURATION_SEC = 86_400
 CONTACT_MODEL_VERSION = "xop_operator_visibility_gates_gsany_v1"
 
@@ -46,13 +51,21 @@ def _cp_meta_path(cache: Path, step: int, isl_range: float) -> Path:
     return cache / f"cp_24h_step{step}_range{isl_range:.0f}_meta.json"
 
 
-def _tf_path(cache: Path, seed: int, rate: float, step: int, isl_range: float) -> Path:
+def _tf_path(
+    cache: Path,
+    seed: int,
+    rate: float,
+    step: int,
+    isl_range: float,
+    operator_load_weights: Mapping[str, float],
+) -> Path:
     weights_json = json.dumps(
-        cfg.simulation.operator_load_weights, sort_keys=True, separators=(",", ":")
+        operator_load_weights, sort_keys=True, separators=(",", ":")
     )
     weights_key = hashlib.sha256(weights_json.encode()).hexdigest()[:10]
     return cache / (
-        f"tf_pair_v2_d{cfg.simulation.traffic_direction_bias:.3f}_"
+        f"tf_pair_v2_e{contact_plan_epoch_key()}_"
+        f"d{cfg.simulation.traffic_direction_bias:.3f}_"
         f"w{weights_key}_24h_"
         f"s{seed}_r{rate:.6f}_"
         f"step{step}_range{isl_range:.0f}.json"
@@ -106,6 +119,7 @@ def compute_contact_plan(
             meta = {}
         cache_is_current = (
             meta.get("contact_model_version") == CONTACT_MODEL_VERSION
+            and meta.get("epoch") == EPOCH.isoformat()
             and meta.get("cross_operator_only") is True
             and meta.get("isl_visibility_gates") == "operator_range_clearance_fov_pointing_doppler_margin"
             and meta.get("gs_access_policy") == "any_operator_secure_access"
@@ -161,9 +175,12 @@ def compute_traffic_schedule(
     rate: float,
     step: int,
     isl_range: float,
+    operator_load_weights: Mapping[str, float],
     force: bool = False,
 ) -> None:
-    tf_file = _tf_path(cache, seed, rate, step, isl_range)
+    tf_file = _tf_path(
+        cache, seed, rate, step, isl_range, operator_load_weights
+    )
     if not force and tf_file.exists():
         print(f"  [{_ts()}] [cached] {tf_file.name}")
         return
@@ -174,6 +191,7 @@ def compute_traffic_schedule(
         operator_map,
         arrival_rate=rate,
         seed=seed,
+        operator_load_weights=operator_load_weights,
     )
     schedule = generator.generate_poisson_schedule(0.0, DURATION_SEC)
     records = [_flow_to_dict(t, flow) for t, flow in schedule]
@@ -232,12 +250,14 @@ def main() -> None:
         raise SystemExit(
             f"No satellites loaded from {data_dir / 'tles'}; expected .txt or .tle files"
         )
+    operator_load_weights = constellation_size_weights(operators_tles)
 
     print(
         f"[{_ts()}] LIOS precompute: {len(operator_map)} satellites, "
         f"{len(operators_tles)} operators, {len(tle_files)} TLE files, "
         f"{len(gs_files)} GS files, step={args.step}s, range={args.range:.0f}km"
     )
+    print(f"[{_ts()}] Operator load weights: {operator_load_weights}")
     cp = compute_contact_plan(
         cache_dir,
         operators_tles,
@@ -260,6 +280,7 @@ def main() -> None:
                     rate,
                     args.step,
                     args.range,
+                    operator_load_weights,
                     force=force_traffic,
                 )
 

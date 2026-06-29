@@ -14,7 +14,7 @@ import json
 import pprint
 import sys
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import timedelta
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -37,7 +37,7 @@ from simulator.ground_station_node import FabricMock, GroundStationNode
 from simulator.satellite_node import SatelliteNode, create_satellite
 from simulator.simulator import EventLoop, EventType, SimEvent
 from config import cfg as lios_cfg
-from simulator.traffic_generator import TrafficGenerator
+from simulator.traffic_generator import TrafficGenerator, constellation_size_weights
 
 
 DATA_DIR  = Path(__file__).parent.parent / "data"
@@ -91,17 +91,6 @@ EXPERIMENT_CONFIGS: List[ExperimentConfig] = [
         baseline_protocol="ground_reset",
     )
 ]
-
-
-def _constellation_size_weights(operators_tles: Dict[str, List]) -> dict[str, float]:
-    """Return operator weights proportional to loaded constellation sizes."""
-    total_satellites = sum(len(satellites) for satellites in operators_tles.values())
-    if total_satellites <= 0:
-        raise ValueError("cannot derive operator weights without satellites")
-    return {
-        operator: len(satellites) / total_satellites
-        for operator, satellites in operators_tles.items()
-    }
 
 
 # ── Contact traffic attribution ────────────────────────────────────────────────
@@ -440,7 +429,7 @@ def run_experiment(
     n_sats_total = sum(len(v) for v in operators_tles.values())
     n_gs_total   = sum(len(v) for v in ground_stations.values())
     operator_load_weights = (
-        _constellation_size_weights(operators_tles)
+        constellation_size_weights(operators_tles)
         if config.operator_load_weights is None
         else dict(config.operator_load_weights)
     )
@@ -448,8 +437,8 @@ def run_experiment(
     _step(f"1/8  {len(operator_ids)} operators, {n_sats_total} sats, {n_gs_total} GS")
 
     # 2. Compute contact plan (load from cache when available, save on miss)
-    epoch = datetime(2025, 11, 19, 0, 15, 0, tzinfo=timezone.utc)
-    from datetime import timedelta
+    from precompute import CONTACT_PLAN_EPOCH
+    epoch = CONTACT_PLAN_EPOCH
     from precompute import load_contact_plan, save_contact_plan
 
     cp = load_contact_plan(CACHE_DIR, config.duration_sec, config.time_step_sec, config.isl_range_km)

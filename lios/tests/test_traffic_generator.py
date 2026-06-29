@@ -2,7 +2,15 @@
 from __future__ import annotations
 
 from contact_plan.window_calculator import Contact, ContactPlan
-from simulator.traffic_generator import TrafficGenerator
+from simulator.traffic_generator import TrafficGenerator, constellation_size_weights
+
+
+def test_constellation_size_weights_are_normalized() -> None:
+    weights = constellation_size_weights(
+        {"large": [object(), object(), object()], "small": [object()]}
+    )
+
+    assert weights == {"large": 0.75, "small": 0.25}
 
 
 def _contact(

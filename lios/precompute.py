@@ -5,18 +5,24 @@ repeated experiment runs skip expensive recomputation.
 
 File layout under cache_dir:
   cp_{dur}s_step{step}_range{rng:.0f}_gsany.csv
-  tf_pair_v2_d{bias}_w{weights}_{dur}s_s{seed}_r{rate:.6f}_step{step}_range{rng:.0f}.json
+  tf_pair_v2_e{epoch}_d{bias}_w{weights}_{dur}s_s{seed}_r{rate:.6f}_step{step}_range{rng:.0f}.json
 """
 from __future__ import annotations
 
 import hashlib
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional, Tuple
 
 from config import cfg
 
 CONTACT_MODEL_VERSION = "xop_operator_visibility_gates_gsany_v1"
+CONTACT_PLAN_EPOCH = datetime(2026, 6, 14, 0, 0, 0, tzinfo=timezone.utc)
+
+
+def contact_plan_epoch_key() -> str:
+    return CONTACT_PLAN_EPOCH.strftime("%Y%m%dT%H%M%S")
 
 
 # ── Path helpers ──────────────────────────────────────────────────────────────
@@ -43,7 +49,8 @@ def _tf_path(cache_dir: Path, duration_sec: int, seed: int,
     weights = operator_load_weights or cfg.simulation.operator_load_weights
     weights_key = _weights_key(weights)
     return cache_dir / (
-        f"tf_pair_v2_d{bias:.3f}_w{weights_key}_{duration_sec}s_s{seed}_r{rate:.6f}_"
+        f"tf_pair_v2_e{contact_plan_epoch_key()}_d{bias:.3f}_w{weights_key}_"
+        f"{duration_sec}s_s{seed}_r{rate:.6f}_"
         f"step{step}_range{rng:.0f}.json"
     )
 
@@ -88,9 +95,22 @@ def load_contact_plan(cache_dir: Path, duration_sec: int,
       2. HPC format:    cp_24h_step{step}_range{rng:.0f}.csv  (superset, covers any duration)
     """
     from contact_plan.window_calculator import ContactPlan
-    from datetime import datetime, timezone
-
-    candidates = [_cp_path(cache_dir, duration_sec, time_step_sec, isl_range_km)]
+    candidates = []
+    local_cp = _cp_path(cache_dir, duration_sec, time_step_sec, isl_range_km)
+    local_meta = _cp_meta_path(
+        cache_dir, duration_sec, time_step_sec, isl_range_km
+    )
+    if local_cp.exists() and local_meta.exists():
+        try:
+            meta = json.loads(local_meta.read_text())
+        except json.JSONDecodeError:
+            meta = {}
+        if (
+            meta.get("contact_model_version") == CONTACT_MODEL_VERSION
+            and meta.get("epoch") == CONTACT_PLAN_EPOCH.isoformat()
+            and meta.get("gs_access_policy") == "any_operator_secure_access"
+        ):
+            candidates.append(local_cp)
 
     hpc_cp = cache_dir / f"cp_24h_step{time_step_sec}_range{isl_range_km:.0f}.csv"
     hpc_meta = cache_dir / f"cp_24h_step{time_step_sec}_range{isl_range_km:.0f}_meta.json"
@@ -101,14 +121,14 @@ def load_contact_plan(cache_dir: Path, duration_sec: int,
             meta = {}
         if (
             meta.get("contact_model_version") == CONTACT_MODEL_VERSION
+            and meta.get("epoch") == CONTACT_PLAN_EPOCH.isoformat()
             and meta.get("gs_access_policy") == "any_operator_secure_access"
         ):
             candidates.append(hpc_cp)
     p = next((c for c in candidates if c.exists()), None)
     if p is None:
         return None
-    epoch = datetime(2025, 11, 19, 0, 15, 0, tzinfo=timezone.utc)
-    cp = ContactPlan.from_csv(p, epoch)
+    cp = ContactPlan.from_csv(p, CONTACT_PLAN_EPOCH)
     print(f"  [cache] contact plan loaded: {p.name} ({len(cp.contacts)} contacts)")
     return cp
 
@@ -121,6 +141,7 @@ def save_contact_plan(cache_dir: Path, cp,
     _cp_meta_path(cache_dir, duration_sec, time_step_sec, isl_range_km).write_text(
         json.dumps(
             {
+                "epoch": CONTACT_PLAN_EPOCH.isoformat(),
                 "contact_model_version": CONTACT_MODEL_VERSION,
                 "duration_sec": duration_sec,
                 "time_step_sec": time_step_sec,
@@ -156,7 +177,8 @@ def load_traffic_schedule(cache_dir: Path, seed: int, rate: float,
             weights,
         ),
         cache_dir / (
-            f"tf_pair_v2_d{cfg.simulation.traffic_direction_bias:.3f}_"
+            f"tf_pair_v2_e{contact_plan_epoch_key()}_"
+            f"d{cfg.simulation.traffic_direction_bias:.3f}_"
             f"w{weights_key}_24h_"
             f"s{seed}_r{rate:.6f}_step{time_step_sec}_range{isl_range_km:.0f}.json"
         ),

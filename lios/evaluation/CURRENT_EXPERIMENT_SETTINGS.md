@@ -99,7 +99,7 @@ scale with satellite, ground-station, or active-pair count.
 
 | Setting | Effective value |
 |---|---:|
-| Contact-plan epoch | 2025-11-19 00:15:00 UTC |
+| Contact-plan epoch | 2026-06-14 00:00:00 UTC |
 | Contact-plan end | Epoch + 86,400 s |
 | Propagation model | SGP4 with WGS-84 |
 | Sampling step | 30 s |
@@ -224,9 +224,9 @@ baseline's required `GroundResetFabricMock` type.
 
 ## Cache and outputs
 
-Contact plans are cached by duration, time step, and broad ISL range. Traffic
-schedules are additionally keyed by random seed, arrival rate, and the full
-operator-weight mapping.
+Contact plans are cached by duration, time step, and broad ISL range, with the
+epoch validated in cache metadata. Traffic schedule filenames are additionally
+keyed by epoch, random seed, arrival rate, and the full operator-weight mapping.
 
 With the default `--out results`, each experiment writes:
 
