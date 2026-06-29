@@ -192,7 +192,7 @@ To visualize mobility and contact geometry:
 
 ```bash
 python lios/scripts/illustrate_satellite_path.py \
-  --log lios/results/logs/lios_load_equal_propagation_log.json \
+  --log lios/results/logs/lios_constellation_weighted_propagation_log.json \
   --out lios/cache/mobility_contacts.png \
   --contact-type all
 ```
