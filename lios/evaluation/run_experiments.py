@@ -893,8 +893,9 @@ def generate_latex_table(results: List[ExperimentResult]) -> str:
     rows = ""
     for r in results:
         m = r.metrics
+        config_name = r.config.name.replace("_", r"\_")
         rows += (
-            f"{r.config.name.replace('_', '\\_')} & "
+            f"{config_name} & "
             f"{m.get('jain_fairness_index', 0):.3f} & "
             f"{m.get('oos_fraction', 0)*100:.2f} & "
             f"{m.get('penalty_events', 0)} & "
