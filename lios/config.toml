@@ -56,9 +56,10 @@ isl_max_kbps = 10_000.0
 # Peak GS uplink capacity at minimum elevation (kbps)
 gs_max_kbps = 50_000.0
 
-# Default maximum inter-satellite link range (km)
-# 1500 km matches Starlink's ~550 km shell operational ISL range
-isl_max_range_km = 1500.0
+# Candidate-search maximum inter-satellite link range (km).  Operator-specific
+# d_max gates below apply the final range rule; this value is the broad spatial
+# index ceiling and CLI/cache tag.
+isl_max_range_km = 4000.0
 
 # Maximum simultaneous ISLs a satellite may hold (transceiver limit)
 # 4 = 2 in-plane + 2 cross-plane, matching Starlink laser terminal design
@@ -66,6 +67,111 @@ max_isl_per_sat = 4
 
 # Default minimum ground-station elevation mask (degrees)
 gs_min_elevation_deg = 5.0
+
+# Operator-wise ISL visibility profiles from
+# isl_visibility_criteria_by_operator.html.  Ranges published as intervals are
+# represented by their midpoint so each experiment has one reproducible value:
+# Starlink 1000-2500 -> 1750 km, Telesat 3000-4000 -> 3500 km,
+# Kuiper 2500-3500 -> 3000 km, OneWeb Gen-2 estimate -> 2500 km.
+# For cross-operator links the calculator uses the stricter endpoint value for
+# each gate, so averages are only computed over samples that already passed all
+# instantaneous visibility criteria.
+#
+# fov/elevation convention: maximum absolute depression/elevation from the
+# local horizontal tangent plane.  LEO crosslinks normally point slightly below
+# the tangent plane, so this is the physically usable form of the HTML
+# off-nadir/FOV gate for satellite-to-satellite links.
+# link_* values are an equivalent Friis budget.  They are calibrated so the
+# link-margin gate is explicit but does not exceed the listed operator d_max.
+[link.operator_isl_criteria.default]
+max_range_km = 1500.0
+atmosphere_clearance_km = 80.0
+max_tangent_depression_deg = 45.0
+pointing_half_angle_deg = 45.0
+max_radial_velocity_km_s = 4.0
+min_contact_duration_sec = 2.0
+carrier_frequency_ghz = 193000.0
+eirp_dbw = 145.0
+rx_gain_db = 145.0
+receiver_sensitivity_dbw = -42.0
+
+[link.operator_isl_criteria.starlink]
+max_range_km = 1750.0
+atmosphere_clearance_km = 80.0
+max_tangent_depression_deg = 26.0
+pointing_half_angle_deg = 26.0
+max_radial_velocity_km_s = 4.0
+min_contact_duration_sec = 2.0
+carrier_frequency_ghz = 193000.0
+eirp_dbw = 145.0
+rx_gain_db = 145.0
+receiver_sensitivity_dbw = -42.0
+
+[link.operator_isl_criteria.oneweb]
+max_range_km = 2500.0
+atmosphere_clearance_km = 20.0
+max_tangent_depression_deg = 60.0
+pointing_half_angle_deg = 60.0
+max_radial_velocity_km_s = 1.5
+min_contact_duration_sec = 0.5
+carrier_frequency_ghz = 60.0
+eirp_dbw = 65.0
+rx_gain_db = 45.0
+receiver_sensitivity_dbw = -38.0
+
+[link.operator_isl_criteria.telesat]
+max_range_km = 3500.0
+atmosphere_clearance_km = 80.0
+max_tangent_depression_deg = 45.0
+pointing_half_angle_deg = 45.0
+max_radial_velocity_km_s = 4.0
+min_contact_duration_sec = 5.0
+carrier_frequency_ghz = 193000.0
+eirp_dbw = 151.0
+rx_gain_db = 151.0
+receiver_sensitivity_dbw = -42.0
+
+[link.operator_isl_criteria.kuiper]
+max_range_km = 3000.0
+atmosphere_clearance_km = 80.0
+max_tangent_depression_deg = 45.0
+pointing_half_angle_deg = 45.0
+max_radial_velocity_km_s = 4.0
+min_contact_duration_sec = 2.0
+carrier_frequency_ghz = 193000.0
+eirp_dbw = 150.0
+rx_gain_db = 150.0
+receiver_sensitivity_dbw = -42.0
+
+[link.operator_isl_criteria.spacex_starlink]
+alias = "starlink"
+
+[link.operator_isl_criteria.g60_starlink]
+alias = "starlink"
+
+[link.operator_isl_criteria.eutelsat_oneweb]
+alias = "oneweb"
+
+[link.operator_isl_criteria.telesat_lightspeed]
+alias = "telesat"
+
+[link.operator_isl_criteria.amazon_project_kuiper]
+alias = "kuiper"
+
+[link.operator_isl_criteria.amazon_kuiper]
+alias = "kuiper"
+
+[link.operator_isl_criteria.op1]
+alias = "starlink"
+
+[link.operator_isl_criteria.op2]
+alias = "oneweb"
+
+[link.operator_isl_criteria.op3]
+alias = "telesat"
+
+[link.operator_isl_criteria.op4]
+alias = "kuiper"
 
 # ── Simulation / DES ──────────────────────────────────────────────────────────
 
@@ -86,6 +192,11 @@ traffic_allocation = "uniform_active_pair"
 # After sorting the selected pair by satellite ID, probability that traffic
 # travels from the first satellite to the second. 0.5 is directionally unbiased.
 traffic_direction_bias = 0.5
+
+# Relative source-operator load. The global arrival_rate remains unchanged.
+# Equal values preserve the existing uniform workload. For example,
+# { op1 = 4.0, op2 = 1.0, op3 = 1.0, op4 = 1.0 } skews traffic toward op1.
+operator_load_weights = { op1 = 1.0, op2 = 1.0, op3 = 1.0, op4 = 1.0 }
 
 # Default PRNG seed for reproducible runs
 random_seed = 42

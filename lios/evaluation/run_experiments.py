@@ -57,7 +57,13 @@ class ExperimentConfig:
     time_step_sec: int = lios_cfg.simulation.time_step_sec
     p_attack: float = lios_cfg.simulation.p_attack   # E1: rollback probability per settlement
     p_drop: float = 0.3                              # E2: selective-fwd drop probability
-    baseline_protocol: str = "lios"                  # 'lios' | 'greedy' | 't4t' | 'central'
+    baseline_protocol: str = "lios"                  # 'lios' | 'ground_reset' | 'greedy' | 't4t' | 'central'
+    operator_load_weights: Optional[dict[str, float]] = None
+    """Relative source load by operator.
+
+    ``None`` derives normalized weights from the number of satellites loaded
+    for each operator, keeping the workload aligned with constellation size.
+    """
 
 
 @dataclass
@@ -69,23 +75,33 @@ class ExperimentResult:
 
 
 EXPERIMENT_CONFIGS: List[ExperimentConfig] = [
-    # §16.1 Table — all 7 experiment configurations
-    # ExperimentConfig("baseline",        duration_sec=3600,  traffic_arrival_rate=0.50, adversarial_mode="none"),
-    # ExperimentConfig("depletion",       duration_sec=5_400,  traffic_arrival_rate=0.95, adversarial_mode="none",  random_seed=43),
-    # ExperimentConfig("top_up",          duration_sec=86_400, traffic_arrival_rate=0.80, adversarial_mode="none",  random_seed=44),
-    # ExperimentConfig("adversarial_1",   duration_sec=86_400, traffic_arrival_rate=0.70, adversarial_mode="rollback",         random_seed=45),
-    # ExperimentConfig("adversarial_2",   duration_sec=86_400, traffic_arrival_rate=0.70, adversarial_mode="selective_forward", random_seed=46),
-    # # Config 6: long-duration fairness (24 h, moderate load)
-    # ExperimentConfig("fairness_24h",    duration_sec=86_400, traffic_arrival_rate=0.60, adversarial_mode="none",  random_seed=49),
-    # # Config 7: high-density — test throughput ceiling before fairness degrades
-    # ExperimentConfig("high_density",    duration_sec=5_400,  traffic_arrival_rate=0.99, adversarial_mode="none",  random_seed=48, time_step_sec=10),
-
-    # Baseline comparison configs (same duration/load as fairness_24h for direct comparison)
-    ExperimentConfig("lios",             duration_sec=86400, traffic_arrival_rate=0.3, adversarial_mode="none",  random_seed=42),
-    ExperimentConfig("baseline_greedy",  duration_sec=86400, traffic_arrival_rate=0.3, adversarial_mode="none", baseline_protocol="greedy",  random_seed=42),
-    ExperimentConfig("baseline_t4t",     duration_sec=86400, traffic_arrival_rate=0.3, adversarial_mode="none", baseline_protocol="t4t",     random_seed=42),
-    ExperimentConfig("baseline_central", duration_sec=86400, traffic_arrival_rate=0.3, adversarial_mode="none", baseline_protocol="central", random_seed=42),
+    ExperimentConfig(
+        "lios_constellation_weighted",
+        duration_sec=86_400,
+        traffic_arrival_rate=0.3,
+        adversarial_mode="none",
+        random_seed=42,
+    ),
+    ExperimentConfig(
+        "ground_reset_constellation_weighted",
+        duration_sec=86_400,
+        traffic_arrival_rate=0.3,
+        adversarial_mode="none",
+        random_seed=42,
+        baseline_protocol="ground_reset",
+    )
 ]
+
+
+def _constellation_size_weights(operators_tles: Dict[str, List]) -> dict[str, float]:
+    """Return operator weights proportional to loaded constellation sizes."""
+    total_satellites = sum(len(satellites) for satellites in operators_tles.values())
+    if total_satellites <= 0:
+        raise ValueError("cannot derive operator weights without satellites")
+    return {
+        operator: len(satellites) / total_satellites
+        for operator, satellites in operators_tles.items()
+    }
 
 
 # ── Contact traffic attribution ────────────────────────────────────────────────
@@ -411,7 +427,10 @@ def run_experiment(
         _step_t = time.time()
 
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    print(f"\n[EXP] {config.name}: duration={config.duration_sec}s  global_rate={config.traffic_arrival_rate}")
+    print(
+        f"\n[EXP] {config.name}: duration={config.duration_sec}s  "
+        f"global_rate={config.traffic_arrival_rate}"
+    )
 
     # 1. Load TLEs and ground stations
     print("  Loading TLEs and ground stations...")
@@ -420,6 +439,12 @@ def run_experiment(
     operator_ids = list(operators_tles.keys())
     n_sats_total = sum(len(v) for v in operators_tles.values())
     n_gs_total   = sum(len(v) for v in ground_stations.values())
+    operator_load_weights = (
+        _constellation_size_weights(operators_tles)
+        if config.operator_load_weights is None
+        else dict(config.operator_load_weights)
+    )
+    print(f"  Operator load weights: {operator_load_weights}")
     _step(f"1/8  {len(operator_ids)} operators, {n_sats_total} sats, {n_gs_total} GS")
 
     # 2. Compute contact plan (load from cache when available, save on miss)
@@ -480,10 +505,12 @@ def run_experiment(
             elif config.baseline_protocol != "lios":
                 from evaluation.baselines import (
                     GreedySatelliteNode, TitForTatNode, CentralSatelliteNode,
+                    GroundResetSatelliteNode,
                 )
                 _cls = {"greedy": GreedySatelliteNode,
                         "t4t":    TitForTatNode,
-                        "central": CentralSatelliteNode}[config.baseline_protocol]
+                        "central": CentralSatelliteNode,
+                        "ground_reset": GroundResetSatelliteNode}[config.baseline_protocol]
                 node = create_satellite(sat_meta.sat_id, op, cas[op], cas, isl_fsm,
                                         operator_ids, node_class=_cls)
             else:
@@ -503,23 +530,27 @@ def run_experiment(
     elif config.baseline_protocol == "central":
         from evaluation.baselines import CentralFabricMock
         fabric = CentralFabricMock()
+    elif config.baseline_protocol == "ground_reset":
+        from evaluation.baselines import GroundResetFabricMock
+        fabric = GroundResetFabricMock()
     else:
         fabric = FabricMock()
 
-    # One shared pending-notification dict per operator so that any GS of the same
-    # operator can deliver an ISL_RESUME regardless of which GS queued it.
-    # Without sharing, a satellite that contacts GS-B after GS-A queued its
-    # ISL_RESUME would never receive the notification (notification stuck in GS-A).
-    op_shared_pending: Dict[str, Dict[str, List]] = {op: {} for op in ground_stations}
+    # Federated GS access: any authorized GS may deliver pending notifications
+    # to any satellite, even when the physical station belongs to another operator.
+    shared_pending: Dict[str, List] = {}
     all_gs: Dict[str, GroundStationNode] = {}
     _gs_cls = GroundStationNode
     if config.baseline_protocol == "central":
         from evaluation.baselines import CentralGroundStationNode
         _gs_cls = CentralGroundStationNode
+    elif config.baseline_protocol == "ground_reset":
+        from evaluation.baselines import GroundResetGroundStationNode
+        _gs_cls = GroundResetGroundStationNode
     for op, gs_list in ground_stations.items():
         for gs_meta in gs_list:
             gs_node = _gs_cls(gs_meta, fabric, isl_fsm,
-                              shared_pending=op_shared_pending[op])
+                              shared_pending=shared_pending)
             all_gs[gs_meta.gs_id] = gs_node
     # Inject peer GS registry so each GS can push SETTLEMENT_TRIGGER to peer operators.
     gs_registry = {gn.operator_id: gs_id for gs_id, gn in all_gs.items()}
@@ -536,6 +567,7 @@ def run_experiment(
     schedule = load_traffic_schedule(
         CACHE_DIR, config.random_seed, arrival_rate,
         config.time_step_sec, config.isl_range_km, config.duration_sec,
+        operator_load_weights,
     )
 
     if schedule is None:
@@ -545,12 +577,14 @@ def run_experiment(
             cp, sat_op_map,
             arrival_rate=arrival_rate,
             seed=config.random_seed,
+            operator_load_weights=operator_load_weights,
         )
         schedule = tgen.generate_poisson_schedule(0.0, config.duration_sec)
         tgen_stats = tgen.stats
         save_traffic_schedule(
             CACHE_DIR, schedule, config.random_seed, arrival_rate,
             config.time_step_sec, config.isl_range_km, config.duration_sec,
+            operator_load_weights,
         )
         _step(f"5/8  active-pair traffic schedule ({len(schedule)} flows)")
     else:
@@ -676,6 +710,9 @@ def run_experiment(
     )
     report["simulation_stats"]["traffic_direction_bias"] = (
         lios_cfg.simulation.traffic_direction_bias
+    )
+    report["simulation_stats"]["operator_load_weights"] = (
+        operator_load_weights
     )
     report["traffic_gen"] = tgen_stats.summary()
     print(f"  Jain fairness: {report['jain_fairness_index']:.4f}")

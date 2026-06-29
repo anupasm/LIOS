@@ -21,8 +21,9 @@ taes/*.synctex.gz
 lios/blockchain/fablo/fablo-target/*
 lios/chaincode/isl_settlement/vendor/*
 
-lios/data*/*
+lios/data-*/*
 lios/results*/*
 results*/*
 taes/*
 taes (2)/*
+lios/cache/*

@@ -2,9 +2,9 @@
 
 Traffic model:
   - Global Poisson arrival process (configurable λ in flows/second).
-  - Each arrival is allocated uniformly to a cross-operator ISL pair active
-    at that exact simulation time.
-  - Direction follows ``traffic_direction_bias`` over the canonical sorted pair.
+  - Each arrival is allocated to a cross-operator ISL pair active at that time.
+  - Optional source-operator weights skew pair and direction selection.
+  - ``traffic_direction_bias`` remains the canonical A→B/B→A prior.
   - Flow size is log-normal and clamped by the configured channel limits.
 
 This workload intentionally does not perform end-to-end route calculation.
@@ -15,7 +15,7 @@ from __future__ import annotations
 import math
 import random
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import Dict, List, Mapping, Optional
 from uuid import UUID
 
 from config import cfg
@@ -45,6 +45,7 @@ class TrafficStats:
         self.flows_no_active_pair: int = 0
         self.total_kb_generated: float = 0.0
         self.operator_pairs: Dict[str, int] = {}
+        self.source_operators: Dict[str, int] = {}
         self.satellite_pairs: Dict[str, int] = {}
 
     def record(self, flow: TrafficFlow) -> None:
@@ -54,6 +55,7 @@ class TrafficStats:
         dst_op = flow.dst_satellite.split("-", 1)[0]
         op_pair = "-".join(sorted([src_op, dst_op]))
         self.operator_pairs[op_pair] = self.operator_pairs.get(op_pair, 0) + 1
+        self.source_operators[src_op] = self.source_operators.get(src_op, 0) + 1
         self.satellite_pairs[flow.pair_id] = self.satellite_pairs.get(flow.pair_id, 0) + 1
 
     def summary(self) -> Dict:
@@ -68,6 +70,7 @@ class TrafficStats:
             "mean_hops": 1.0 if self.flows_generated else 0.0,
             "total_kb_generated": self.total_kb_generated,
             "operator_pair_distribution": self.operator_pairs,
+            "source_operator_distribution": self.source_operators,
             "satellite_pair_distribution": self.satellite_pairs,
         }
 
@@ -92,6 +95,7 @@ class TrafficGenerator:
         seed: int = cfg.simulation.random_seed,
         allocation: str = cfg.simulation.traffic_allocation,
         direction_bias: float = cfg.simulation.traffic_direction_bias,
+        operator_load_weights: Optional[Mapping[str, float]] = None,
     ) -> None:
         if arrival_rate <= 0:
             raise ValueError("arrival_rate must be greater than zero")
@@ -99,11 +103,30 @@ class TrafficGenerator:
             raise ValueError(f"unsupported traffic allocation policy: {allocation}")
         if not 0.0 <= direction_bias <= 1.0:
             raise ValueError("direction_bias must be between 0.0 and 1.0")
+        load_weights = dict(
+            cfg.simulation.operator_load_weights
+            if operator_load_weights is None
+            else operator_load_weights
+        )
+        if any(
+            not isinstance(weight, (int, float))
+            or not math.isfinite(weight)
+            or weight < 0
+            for weight in load_weights.values()
+        ):
+            raise ValueError(
+                "operator_load_weights values must be finite and non-negative"
+            )
+        if load_weights and not any(weight > 0 for weight in load_weights.values()):
+            raise ValueError(
+                "operator_load_weights must contain at least one positive value"
+            )
 
         self._cp = contact_plan
         self._op_map = operator_map
         self._rate = arrival_rate
         self._direction_bias = direction_bias
+        self._operator_load_weights = load_weights
         self._rng = random.Random(seed)
         self.stats = TrafficStats()
 
@@ -115,6 +138,12 @@ class TrafficGenerator:
             ),
             key=lambda c: (c.start_time_sec, c.end_time_sec, c.contact_id),
         )
+        effective_weights = {
+            self._load_weight(satellite)
+            for contact in self._cross_operator_contacts
+            for satellite in (contact.from_node, contact.to_node)
+        }
+        self._uniform_load_weights = len(effective_weights) <= 1
 
         # Time-bucket candidate index. Exact contact bounds are checked at lookup.
         self._bucket_sec = 300.0
@@ -129,6 +158,7 @@ class TrafficGenerator:
             "  [TrafficGenerator] "
             f"allocation={allocation}, global_rate={arrival_rate}, "
             f"direction_bias={direction_bias}, "
+            f"operator_load_weights={self._operator_load_weights or 'uniform'}, "
             f"cross_operator_contacts={len(self._cross_operator_contacts)}"
         )
 
@@ -140,6 +170,9 @@ class TrafficGenerator:
 
     def next_arrival_time(self, t_now: float) -> float:
         return t_now + self._rng.expovariate(self._rate)
+
+    def _load_weight(self, satellite_id: str) -> float:
+        return float(self._operator_load_weights.get(self._operator(satellite_id), 1.0))
 
     def _active_pair_contacts(self, t_now: float) -> List[Contact]:
         candidates = self._contacts_by_bucket.get(int(t_now // self._bucket_sec), [])
@@ -161,12 +194,21 @@ class TrafficGenerator:
             self.stats.flows_no_active_pair += 1
             return None
 
-        contact = self._rng.choice(active)
-        sat_a, sat_b = sorted([contact.from_node, contact.to_node])
-        if self._rng.random() < self._direction_bias:
-            src_sat, dst_sat = sat_a, sat_b
+        # Retain the original O(1) pair selection and seeded sequence when all
+        # effective operator weights are equal.
+        if self._uniform_load_weights:
+            contact = self._rng.choice(active)
+            sat_a, sat_b = sorted([contact.from_node, contact.to_node])
+            if self._rng.random() < self._direction_bias:
+                src_sat, dst_sat = sat_a, sat_b
+            else:
+                src_sat, dst_sat = sat_b, sat_a
         else:
-            src_sat, dst_sat = sat_b, sat_a
+            contact, src_sat, dst_sat = self._choose_weighted_direction(active)
+            if contact is None:
+                self.stats.flows_no_active_pair += 1
+                return None
+            sat_a, sat_b = sorted([contact.from_node, contact.to_node])
 
         flow = TrafficFlow(
             flow_id=str(UUID(int=self._rng.getrandbits(128))),
@@ -180,6 +222,36 @@ class TrafficGenerator:
         )
         self.stats.record(flow)
         return flow
+
+    def _choose_weighted_direction(
+        self, active: List[Contact]
+    ) -> tuple[Optional[Contact], str, str]:
+        """Sample an active pair and source direction using operator weights."""
+        # A directed candidate combines the configured operator source weight
+        # with the existing canonical direction prior. With equal operator
+        # weights every active pair has equal total weight and the old
+        # uniform-pair/direction behavior is preserved.
+        directed: List[tuple[Contact, str, str]] = []
+        weights: List[float] = []
+        for candidate in active:
+            sat_a, sat_b = sorted([candidate.from_node, candidate.to_node])
+            directed.extend(
+                [(candidate, sat_a, sat_b), (candidate, sat_b, sat_a)]
+            )
+            weights.extend(
+                [
+                    self._load_weight(sat_a) * self._direction_bias,
+                    self._load_weight(sat_b) * (1.0 - self._direction_bias),
+                ]
+            )
+
+        if not any(weight > 0 for weight in weights):
+            return None, "", ""
+
+        contact, src_sat, dst_sat = self._rng.choices(
+            directed, weights=weights, k=1
+        )[0]
+        return contact, src_sat, dst_sat
 
     def generate_poisson_schedule(
         self, t_start: float, t_end: float

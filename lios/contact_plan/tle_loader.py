@@ -1,6 +1,7 @@
-"""TLE loader — reads *.txt files from lios/data/tles/.
+"""TLE loader — reads *.txt and *.tle files from lios/data/tles/.
 
-Each file is named <operator>.txt and contains one or more 3-line TLE entries:
+Each file is named <operator>.txt or <operator>.tle and contains one or more
+3-line TLE entries:
   NAME LINE
   1 ...
   2 ...
@@ -38,14 +39,22 @@ class TLELoader:
 
     @classmethod
     def load_all(cls, data_dir: Path) -> Dict[str, List[Satellite]]:
-        """Scan data_dir/tles/ for *.txt files; parse each into Satellite objects."""
+        """Scan data_dir/tles/ for TLE files; parse each into Satellite objects."""
         tle_dir = data_dir / cls.TLE_DIR_NAME
         if not tle_dir.exists():
             raise FileNotFoundError(f"TLE directory not found: {tle_dir}")
 
         result: Dict[str, List[Satellite]] = {}
-        for path in sorted(tle_dir.glob("*.txt")):
+        paths = sorted([*tle_dir.glob("*.txt"), *tle_dir.glob("*.tle")])
+        seen_operators: set[str] = set()
+        for path in paths:
             operator = path.stem.lower()
+            if operator in seen_operators:
+                raise ValueError(
+                    f"Duplicate TLE operator file stem {operator!r} in {tle_dir}; "
+                    "keep only one of .txt or .tle for each operator"
+                )
+            seen_operators.add(operator)
             sats = cls._parse_file(path, operator)
             result[operator] = sats
         return result

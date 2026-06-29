@@ -292,8 +292,8 @@ class GroundStationNode:
         self._fabric = fabric
         self._isl_fsm = isl_fsm
 
-        # Shared across all GS of the same operator so that any GS can deliver
-        # an ISL_RESUME notification regardless of which GS queued it originally.
+        # Shared notification queues let any authorized GS deliver an ISL_RESUME
+        # regardless of which station queued it.
         self._pending_to_satellites: Dict[str, List[dict]] = (
             shared_pending if shared_pending is not None else {}
         )
@@ -398,6 +398,7 @@ class GroundStationNode:
         """
         ch_id = payload.channel_id
         proof = payload.latest_proof
+        settlement_operator = self._operator_for_satellite(sat_id)
 
         # Always store the latest proof from our satellite for future challenge detection.
         self._latest_sat_proofs[ch_id] = proof
@@ -411,7 +412,7 @@ class GroundStationNode:
             pending_seq = ch_rec["proof"]["seq_num"]
             if proof.seq_num > pending_seq:
                 challenged = self._fabric.challenge_settlement(
-                    ch_id, proof, t, submitted_by=self.operator_id
+                    ch_id, proof, t, submitted_by=settlement_operator
                 )
                 if challenged:
                     self._isl_fsm.on_settlement_finalized(ch_id)
@@ -447,7 +448,7 @@ class GroundStationNode:
             # FINALIZED which puts the channel in _notified_channels.  If that trigger
             # already arrived before our satellite uploaded, skip the duplicate call.
             if ch_id not in self._notified_channels:
-                self._fabric.submit_balance_reset(ch_id, proof, self.operator_id, t)
+                self._fabric.submit_balance_reset(ch_id, proof, settlement_operator, t)
                 commit_latency = self._fabric.commit_latency_sec
                 self._isl_fsm.on_settlement_finalized(ch_id)
                 self._log("BALANCE_RESET_SUBMITTED", channel_id=ch_id, t=t)
@@ -455,7 +456,7 @@ class GroundStationNode:
                 self._notified_channels.add(ch_id)
                 for other_sat in ch_id.split("__"):
                     other_op = other_sat.split("-")[0] if "-" in other_sat else ""
-                    if other_op and other_op != self.operator_id:
+                    if other_op and other_op != settlement_operator:
                         peer_gs_id = self.gs_registry.get(other_op)
                         if peer_gs_id:
                             new_events.append(SimEvent(
@@ -475,7 +476,7 @@ class GroundStationNode:
             return new_events
 
         # Normal settlement path (T2/T7).
-        result = self._fabric.initiate_settlement(ch_id, proof, self.operator_id, t)
+        result = self._fabric.initiate_settlement(ch_id, proof, settlement_operator, t)
         commit_latency = self._fabric.commit_latency_sec
         status = result["status"] if isinstance(result, dict) else "NEW_PENDING"
 
@@ -501,7 +502,7 @@ class GroundStationNode:
             self._notified_channels.add(ch_id)
             for other_sat in ch_id.split("__"):
                 other_op = other_sat.split("-")[0] if "-" in other_sat else ""
-                if other_op and other_op != self.operator_id:
+                if other_op and other_op != settlement_operator:
                     peer_gs_id = self.gs_registry.get(other_op)
                     if peer_gs_id:
                         new_events.append(SimEvent(
@@ -524,7 +525,7 @@ class GroundStationNode:
             ))
             for other_sat in ch_id.split("__"):
                 other_op = other_sat.split("-")[0] if "-" in other_sat else ""
-                if other_op and other_op != self.operator_id:
+                if other_op and other_op != settlement_operator:
                     peer_gs_id = self.gs_registry.get(other_op)
                     if peer_gs_id:
                         new_events.append(SimEvent(
@@ -562,6 +563,7 @@ class GroundStationNode:
         if not ch_id:
             return []
         t = event.time
+        settlement_operator = self._operator_for_satellite(sat_id or "")
 
         rec = self._fabric.get_pending_settlement(ch_id)
         if rec.get("status") == "PENDING_CHALLENGE":
@@ -581,7 +583,7 @@ class GroundStationNode:
             self._notified_channels.add(ch_id)
             for other_sat in ch_id.split("__"):
                 other_op = other_sat.split("-")[0] if "-" in other_sat else ""
-                if other_op and other_op != self.operator_id:
+                if other_op and other_op != settlement_operator:
                     peer_gs_id = self.gs_registry.get(other_op)
                     if peer_gs_id:
                         new_events.append(SimEvent(
@@ -671,3 +673,6 @@ class GroundStationNode:
 
     def _log(self, event_type: str, **kwargs) -> None:
         self.event_log.append({"event": event_type, "gs": self.gs_id, **kwargs})
+
+    def _operator_for_satellite(self, sat_id: Optional[str]) -> str:
+        return sat_id.split("-")[0] if sat_id and "-" in sat_id else self.operator_id

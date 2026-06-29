@@ -103,3 +103,55 @@ def test_arrival_rate_is_global_not_node_scaled() -> None:
     first = TrafficGenerator(cp, operators, arrival_rate=2.0, seed=11)
     second = TrafficGenerator(cp, operators, arrival_rate=2.0, seed=11)
     assert first.next_arrival_time(0.0) == second.next_arrival_time(0.0)
+
+
+def test_operator_load_weights_skew_source_operator() -> None:
+    cp, operators = _plan()
+    generator = TrafficGenerator(
+        cp,
+        operators,
+        arrival_rate=1.0,
+        seed=19,
+        direction_bias=0.5,
+        operator_load_weights={"opA": 9.0, "opB": 1.0, "opC": 1.0},
+    )
+
+    # At t=10 only the opA/opB pair is active, so a 9:1 source weight should
+    # produce a strong and reproducible opA source skew.
+    flows = [generator.generate_flow(10.0) for _ in range(2_000)]
+    source_a = sum(
+        flow is not None and flow.src_satellite.startswith("opA-")
+        for flow in flows
+    )
+    assert 1_740 <= source_a <= 1_860
+    assert generator.stats.summary()["source_operator_distribution"]["opA"] == source_a
+
+
+def test_zero_operator_weight_suppresses_that_source() -> None:
+    cp, operators = _plan()
+    generator = TrafficGenerator(
+        cp,
+        operators,
+        arrival_rate=1.0,
+        seed=23,
+        direction_bias=0.5,
+        operator_load_weights={"opA": 0.0, "opB": 1.0, "opC": 1.0},
+    )
+
+    flows = [generator.generate_flow(10.0) for _ in range(100)]
+    assert all(flow is not None and flow.src_satellite == "opB-s1" for flow in flows)
+
+
+def test_rejects_invalid_operator_load_weights() -> None:
+    cp, operators = _plan()
+    try:
+        TrafficGenerator(
+            cp,
+            operators,
+            arrival_rate=1.0,
+            operator_load_weights={"opA": -1.0},
+        )
+    except ValueError as exc:
+        assert "operator_load_weights" in str(exc)
+    else:
+        raise AssertionError("negative operator load weight was accepted")

@@ -29,6 +29,9 @@ C_MAX_GS_KBPS  = cfg.link.gs_max_kbps
 
 _WGS84_RE = 6378.137          # equatorial radius km
 _WGS84_E2 = 0.00669437999014  # first eccentricity squared
+_WGS84_RP = _WGS84_RE * math.sqrt(1.0 - _WGS84_E2)
+_CONTACT_VISIBILITY_MODEL = "opcrit_gsany_v1"
+_FSPL_OFFSET_DB = 92.45
 
 
 @dataclass
@@ -141,6 +144,94 @@ class ContactPlan:
         return cp
 
 
+@dataclass(frozen=True)
+class ISLVisibilityCriteria:
+    """Operator-specific ISL gates resolved to one endpoint profile."""
+
+    max_range_km: float
+    atmosphere_clearance_km: float
+    max_tangent_depression_deg: float
+    pointing_half_angle_deg: float
+    max_radial_velocity_km_s: float
+    min_contact_duration_sec: float
+    carrier_frequency_ghz: float
+    eirp_dbw: float
+    rx_gain_db: float
+    receiver_sensitivity_dbw: float
+
+
+def _normalise_operator_id(operator_id: str) -> str:
+    return operator_id.strip().lower().replace("-", "_").replace(" ", "_")
+
+
+def _profile_from_config(operator_id: str) -> ISLVisibilityCriteria:
+    profiles = cfg.link.operator_isl_criteria
+    key = _normalise_operator_id(operator_id)
+    seen: set[str] = set()
+    raw = profiles.get(key, profiles.get("default", {}))
+    while isinstance(raw, dict) and "alias" in raw:
+        alias = _normalise_operator_id(str(raw["alias"]))
+        if alias in seen:
+            raise ValueError(f"operator_isl_criteria alias cycle at {operator_id!r}")
+        seen.add(alias)
+        raw = profiles.get(alias, profiles.get("default", {}))
+    if not isinstance(raw, dict):
+        raise ValueError(f"operator_isl_criteria[{operator_id!r}] must be a table")
+    return ISLVisibilityCriteria(
+        max_range_km=float(raw["max_range_km"]),
+        atmosphere_clearance_km=float(raw["atmosphere_clearance_km"]),
+        max_tangent_depression_deg=float(raw["max_tangent_depression_deg"]),
+        pointing_half_angle_deg=float(raw["pointing_half_angle_deg"]),
+        max_radial_velocity_km_s=float(raw["max_radial_velocity_km_s"]),
+        min_contact_duration_sec=float(raw["min_contact_duration_sec"]),
+        carrier_frequency_ghz=float(raw["carrier_frequency_ghz"]),
+        eirp_dbw=float(raw["eirp_dbw"]),
+        rx_gain_db=float(raw["rx_gain_db"]),
+        receiver_sensitivity_dbw=float(raw["receiver_sensitivity_dbw"]),
+    )
+
+
+def _pair_criteria(
+    from_profile: ISLVisibilityCriteria,
+    to_profile: ISLVisibilityCriteria,
+    search_range_km: float,
+) -> ISLVisibilityCriteria:
+    """Resolve a bilateral profile by taking the stricter endpoint gate."""
+    return ISLVisibilityCriteria(
+        max_range_km=min(from_profile.max_range_km, to_profile.max_range_km, search_range_km),
+        atmosphere_clearance_km=max(
+            from_profile.atmosphere_clearance_km,
+            to_profile.atmosphere_clearance_km,
+        ),
+        max_tangent_depression_deg=min(
+            from_profile.max_tangent_depression_deg,
+            to_profile.max_tangent_depression_deg,
+        ),
+        pointing_half_angle_deg=min(
+            from_profile.pointing_half_angle_deg,
+            to_profile.pointing_half_angle_deg,
+        ),
+        max_radial_velocity_km_s=min(
+            from_profile.max_radial_velocity_km_s,
+            to_profile.max_radial_velocity_km_s,
+        ),
+        min_contact_duration_sec=max(
+            from_profile.min_contact_duration_sec,
+            to_profile.min_contact_duration_sec,
+        ),
+        carrier_frequency_ghz=max(
+            from_profile.carrier_frequency_ghz,
+            to_profile.carrier_frequency_ghz,
+        ),
+        eirp_dbw=min(from_profile.eirp_dbw, to_profile.eirp_dbw),
+        rx_gain_db=min(from_profile.rx_gain_db, to_profile.rx_gain_db),
+        receiver_sensitivity_dbw=max(
+            from_profile.receiver_sensitivity_dbw,
+            to_profile.receiver_sensitivity_dbw,
+        ),
+    )
+
+
 # ── geometry helpers ───────────────────────────────────────────────────────────
 
 def _eci_position_km(sat: Satellite, jd: float, fr: float) -> Optional[np.ndarray]:
@@ -197,6 +288,131 @@ def _elevation_deg(
     eci_lon = gs_lon_rad + gmst_rad
     zenith = np.array([cos_lat * math.cos(eci_lon), cos_lat * math.sin(eci_lon), math.sin(gs_lat_rad)])
     return math.degrees(math.asin(max(-1.0, min(1.0, float(np.dot(rng_norm, zenith))))))
+
+
+def _segment_clear_of_wgs84_ellipsoid(p0: np.ndarray, p1: np.ndarray) -> bool:
+    """Return True when the straight ISL path does not intersect Earth.
+
+    The WGS-84 ellipsoid is centred at the ECI origin; its polar axis is shared
+    by ECI/ECEF, so Earth rotation does not change this occultation test.
+    """
+    d = p1 - p0
+    a2 = _WGS84_RE * _WGS84_RE
+    b2 = _WGS84_RP * _WGS84_RP
+
+    qa = (d[0] * d[0] + d[1] * d[1]) / a2 + (d[2] * d[2]) / b2
+    qb = 2.0 * ((p0[0] * d[0] + p0[1] * d[1]) / a2 + (p0[2] * d[2]) / b2)
+    qc = (p0[0] * p0[0] + p0[1] * p0[1]) / a2 + (p0[2] * p0[2]) / b2 - 1.0
+
+    if qa <= 0.0:
+        return qc > 0.0
+    disc = qb * qb - 4.0 * qa * qc
+    if disc < 0.0:
+        return True
+
+    sqrt_disc = math.sqrt(disc)
+    t0 = (-qb - sqrt_disc) / (2.0 * qa)
+    t1 = (-qb + sqrt_disc) / (2.0 * qa)
+    return not (0.0 <= t0 <= 1.0 or 0.0 <= t1 <= 1.0)
+
+
+def _segment_tangent_clearance_km(p0: np.ndarray, p1: np.ndarray) -> float:
+    """Minimum spherical Earth clearance along the sampled straight ISL segment."""
+    d = p1 - p0
+    denom = float(np.dot(d, d))
+    if denom <= 0.0:
+        return float(np.linalg.norm(p0) - _WGS84_RE)
+    t = max(0.0, min(1.0, -float(np.dot(p0, d)) / denom))
+    tangent = p0 + t * d
+    return float(np.linalg.norm(tangent) - _WGS84_RE)
+
+
+def _endpoint_tangent_elevation_deg(origin: np.ndarray, target: np.ndarray) -> float:
+    """Elevation of target above origin's local horizontal tangent plane."""
+    los = target - origin
+    los_norm = float(np.linalg.norm(los))
+    origin_norm = float(np.linalg.norm(origin))
+    if los_norm <= 0.0 or origin_norm <= 0.0:
+        return -90.0
+    radial = origin / origin_norm
+    return math.degrees(math.asin(max(-1.0, min(1.0, float(np.dot(los / los_norm, radial))))))
+
+
+def _endpoint_pointing_angle_deg(origin: np.ndarray, target: np.ndarray) -> float:
+    """Off-boresight angle from the local tangent direction toward the peer."""
+    elev = _endpoint_tangent_elevation_deg(origin, target)
+    return abs(elev)
+
+
+def _radial_velocity_km_s(
+    p0_now: np.ndarray,
+    p1_now: np.ndarray,
+    p0_prev: np.ndarray,
+    p1_prev: np.ndarray,
+    dt_sec: float,
+) -> float:
+    if dt_sec <= 0.0:
+        return 0.0
+    los = p1_now - p0_now
+    los_norm = float(np.linalg.norm(los))
+    if los_norm <= 0.0:
+        return 0.0
+    rel_v = ((p1_now - p1_prev) - (p0_now - p0_prev)) / dt_sec
+    return abs(float(np.dot(rel_v, los / los_norm)))
+
+
+def _rx_power_dbw(distance_km: np.ndarray, criteria: ISLVisibilityCriteria) -> np.ndarray:
+    safe_distance = np.maximum(distance_km, 1e-9)
+    fspl_db = (
+        _FSPL_OFFSET_DB
+        + 20.0 * np.log10(safe_distance)
+        + 20.0 * math.log10(criteria.carrier_frequency_ghz)
+    )
+    return criteria.eirp_dbw + criteria.rx_gain_db - fspl_db
+
+
+def _isl_visibility_mask(
+    pos_i: np.ndarray,
+    pos_j: np.ndarray,
+    valid: np.ndarray,
+    dists: np.ndarray,
+    criteria: ISLVisibilityCriteria,
+    ts: np.ndarray,
+) -> np.ndarray:
+    visible = np.zeros(len(valid), dtype=bool)
+    valid_idx = np.where(valid)[0]
+    for idx in valid_idx:
+        if not _segment_clear_of_wgs84_ellipsoid(pos_i[idx], pos_j[idx]):
+            continue
+        if _segment_tangent_clearance_km(pos_i[idx], pos_j[idx]) < criteria.atmosphere_clearance_km:
+            continue
+        elev_i = _endpoint_tangent_elevation_deg(pos_i[idx], pos_j[idx])
+        elev_j = _endpoint_tangent_elevation_deg(pos_j[idx], pos_i[idx])
+        if max(abs(elev_i), abs(elev_j)) > criteria.max_tangent_depression_deg:
+            continue
+        if _endpoint_pointing_angle_deg(pos_i[idx], pos_j[idx]) > criteria.pointing_half_angle_deg:
+            continue
+        if _endpoint_pointing_angle_deg(pos_j[idx], pos_i[idx]) > criteria.pointing_half_angle_deg:
+            continue
+        if idx > 0:
+            prev_i, prev_j = pos_i[idx - 1], pos_j[idx - 1]
+            if not (np.isfinite(prev_i).all() and np.isfinite(prev_j).all()):
+                continue
+            if _radial_velocity_km_s(
+                pos_i[idx], pos_j[idx], prev_i, prev_j, float(ts[idx] - ts[idx - 1])
+            ) > criteria.max_radial_velocity_km_s:
+                continue
+        if _rx_power_dbw(np.array([dists[idx]]), criteria)[0] < criteria.receiver_sensitivity_dbw:
+            continue
+        visible[idx] = True
+    return visible
+
+
+def _cross_operator_contacts_only(raw_contacts: List[dict]) -> List[dict]:
+    return [
+        contact for contact in raw_contacts
+        if contact["operator_from"] != contact["operator_to"]
+    ]
 
 
 def _write_propagation_log(
@@ -310,13 +526,17 @@ def _init_isl_worker(pos_arr: np.ndarray, ts_arr: np.ndarray) -> None:
 
 def _isl_pair_worker(args: tuple) -> List[dict]:
     """Vectorised ISL contact detector; reads pos_arr from process globals."""
-    i, j, from_id, to_id, from_op, to_op, isl_max_range_km = args
+    i, j, from_id, to_id, from_op, to_op, criteria = args
+    if from_op == to_op:
+        return []
+
     pos_i, pos_j = _WORKER_POS_ARR[i], _WORKER_POS_ARR[j]
     ts = _WORKER_TS_ARR
 
     valid = ~(np.isnan(pos_i[:, 0]) | np.isnan(pos_j[:, 0]))
     dists = np.where(valid, np.linalg.norm(pos_i - pos_j, axis=1), np.inf)
-    in_range = valid & (dists < isl_max_range_km)
+    range_valid = valid & (dists <= criteria.max_range_km)
+    in_range = _isl_visibility_mask(pos_i, pos_j, range_valid, dists, criteria, ts)
 
     bordered = np.concatenate(([0], in_range.astype(np.int8), [0]))
     delta = np.diff(bordered)
@@ -325,12 +545,17 @@ def _isl_pair_worker(args: tuple) -> List[dict]:
 
     contacts: List[dict] = []
     for s, e in zip(starts_idx, ends_idx):
+        end_time_sec = float(ts[e]) if e < len(ts) else float(ts[-1])
+        if end_time_sec - float(ts[s]) < criteria.min_contact_duration_sec:
+            continue
         mean_range = float(np.mean(dists[s:e]))
+        if end_time_sec <= float(ts[s]):
+            continue
         contacts.append(dict(
             from_node=from_id, to_node=to_id,
             start_time_sec=float(ts[s]),
-            end_time_sec=float(ts[e - 1]),
-            capacity_kbps=C_MAX_ISL_KBPS * max(0.0, 1.0 - mean_range / isl_max_range_km),
+            end_time_sec=end_time_sec,
+            capacity_kbps=C_MAX_ISL_KBPS * max(0.0, 1.0 - mean_range / criteria.max_range_km),
             range_km=mean_range,
             node_type_from="SAT", node_type_to="SAT",
             operator_from=from_op, operator_to=to_op,
@@ -342,6 +567,7 @@ def _gs_sat_worker(args: tuple) -> List[dict]:
     """GS-sat contact detector; reads pos_arr from process globals."""
     (gs_id, gs_op, gs_lat_deg, gs_lon_deg, gs_alt_m, gs_min_elev,
      si, epoch_jd, epoch_fr, sat_id, sat_op) = args
+
     gs_lat_rad = math.radians(gs_lat_deg)
     gs_lon_rad = math.radians(gs_lon_deg)
     sat_pos = _WORKER_POS_ARR[si]
@@ -353,6 +579,9 @@ def _gs_sat_worker(args: tuple) -> List[dict]:
 
     def _flush(end_sec: float) -> None:
         nonlocal in_contact
+        if end_sec <= contact_start:
+            in_contact = False
+            return
         mean_range = float(np.mean(ranges_in_contact))
         contacts.append(dict(
             from_node=gs_id, to_node=sat_id,
@@ -368,7 +597,7 @@ def _gs_sat_worker(args: tuple) -> List[dict]:
         p_sat = sat_pos[step_idx]
         if np.isnan(p_sat[0]):
             if in_contact:
-                _flush(float(ts[step_idx - 1]) if step_idx > 0 else contact_start)
+                _flush(float(ts[step_idx]) if step_idx > 0 else contact_start)
             continue
         t_sec = float(ts[step_idx])
         fr_step = epoch_fr + t_sec / 86400.0
@@ -386,7 +615,7 @@ def _gs_sat_worker(args: tuple) -> List[dict]:
             else:
                 ranges_in_contact.append(dist)
         elif in_contact:
-            _flush(float(ts[step_idx - 1]) if step_idx > 0 else t_sec)
+            _flush(t_sec)
 
     if in_contact:
         _flush(float(ts[-1]))
@@ -423,7 +652,10 @@ class WindowCalculator:
             return None
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
         isl_tag = f"_deg{self.max_isl_per_sat}" if self.max_isl_per_sat is not None else ""
-        stem = f"step{self.time_step_sec}_range{self.isl_max_range_km:.0f}{isl_tag}"
+        stem = (
+            f"step{self.time_step_sec}_range{self.isl_max_range_km:.0f}"
+            f"{isl_tag}_xop_los_{_CONTACT_VISIBILITY_MODEL}"
+        )
         return self.checkpoint_dir / f"ckpt_{stem}_{name}"
 
     def compute(
@@ -435,6 +667,10 @@ class WindowCalculator:
         cp      = ContactPlan(epoch=self.t_start)
         all_sats: List[Satellite]       = [s  for sats in operators.values()       for s  in sats]
         all_gs:   List[GroundStation]   = [gs for gss  in ground_stations.values() for gs in gss]
+        operator_profiles = {
+            op_id: _profile_from_config(op_id)
+            for op_id in {sat.operator_id for sat in all_sats}
+        }
 
         duration_sec = (self.t_end - self.t_start).total_seconds()
         steps  = int(duration_sec / self.time_step_sec) + 1
@@ -458,6 +694,10 @@ class WindowCalculator:
               f"range={self.isl_max_range_km:.0f}km")
         print(f"  WindowCalculator: {n_sats} sats ({len(operators)} ops: {op_summary}), "
               f"{len(all_gs)} GS, {steps} steps, {workers} workers")
+        print("  WindowCalculator: ISLs restricted to different operators; "
+              "GS-satellite contacts allow any operator GS with elevation mask; "
+              "ISLs require operator-specific range, WGS-84 LOS/clearance, "
+              "FOV/pointing, Doppler, and link-margin gates")
 
         ckpt_p1  = self._ckpt("pos.npy")
         ckpt_p15 = self._ckpt("candidates.npz")
@@ -519,8 +759,14 @@ class WindowCalculator:
             print(f"  [ckpt] Phase 1.5: loading {ckpt_p15.name} ...", flush=True)
             _d = np.load(str(ckpt_p15))
             i_arr, j_arr = _d["i"], _d["j"]
+            cross_op = np.array(
+                [all_sats[int(i)].operator_id != all_sats[int(j)].operator_id
+                 for i, j in zip(i_arr, j_arr)],
+                dtype=bool,
+            )
+            i_arr, j_arr = i_arr[cross_op], j_arr[cross_op]
             total_isl = len(i_arr)
-            print(f"  [ckpt] Phase 1.5: loaded  {total_isl:,} candidate pairs")
+            print(f"  [ckpt] Phase 1.5: loaded  {total_isl:,} cross-operator candidate pairs")
         else:
             # Boolean matrix marks pairs seen in range at any sampled timestep.
             # cKDTree reduces O(n²) checks to O(n·k) per step (k = local neighbors).
@@ -570,13 +816,20 @@ class WindowCalculator:
                         step_counts[min(p, s), max(p, s)] = 0
 
             i_arr, j_arr = np.where(step_counts > 0)
+            if len(i_arr):
+                cross_op = np.array(
+                    [all_sats[int(i)].operator_id != all_sats[int(j)].operator_id
+                     for i, j in zip(i_arr, j_arr)],
+                    dtype=bool,
+                )
+                i_arr, j_arr = i_arr[cross_op], j_arr[cross_op]
             total_isl = len(i_arr)
             del step_counts
             deg_note = (f", capped at {self.max_isl_per_sat} ISLs/sat"
                         if self.max_isl_per_sat is not None else "")
             print(
                 f"    Phase 1.5/3 spatial index: done  "
-                f"{total_isl:,} / {n_pairs_max:,} pairs in {elapsed_cand:.1f}s "
+                f"{total_isl:,} / {n_pairs_max:,} cross-operator pairs in {elapsed_cand:.1f}s "
                 f"({100.0 * total_isl / max(1, n_pairs_max):.2f}% of O(n²)){deg_note}"
             )
             if ckpt_p15:
@@ -587,6 +840,7 @@ class WindowCalculator:
         if ckpt_p2 and ckpt_p2.exists():
             print(f"  [ckpt] Phase 2: loading {ckpt_p2.name} ...", flush=True)
             raw_contacts: List[dict] = _read_contacts_csv(ckpt_p2)
+            raw_contacts = _cross_operator_contacts_only(raw_contacts)
             print(f"  [ckpt] Phase 2: loaded  {len(raw_contacts):,} ISL contacts")
         else:
             raw_contacts = []
@@ -597,10 +851,15 @@ class WindowCalculator:
                 def _isl_args_gen():
                     for k in range(total_isl):
                         i, j = int(i_arr[k]), int(j_arr[k])
+                        criteria = _pair_criteria(
+                            operator_profiles[all_sats[i].operator_id],
+                            operator_profiles[all_sats[j].operator_id],
+                            self.isl_max_range_km,
+                        )
                         yield (i, j,
                                all_sats[i].sat_id, all_sats[j].sat_id,
                                all_sats[i].operator_id, all_sats[j].operator_id,
-                               self.isl_max_range_km)
+                               criteria)
 
                 done = 0
                 t0   = time.perf_counter()

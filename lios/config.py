@@ -22,6 +22,7 @@ Usage::
 """
 from __future__ import annotations
 
+import math
 import os
 import sys
 try:
@@ -105,6 +106,12 @@ class LinkConfig:
     """Minimum elevation angle above the horizon required for a GS–satellite
     contact to be considered viable (degrees)."""
 
+    operator_isl_criteria: dict
+    """Per-operator ISL visibility/profile parameters.  Keys are operator IDs
+    or aliases; values are interpreted by contact_plan.window_calculator.
+    These values are deliberately kept as a raw mapping because experiments may
+    add operators without changing the typed configuration schema."""
+
 
 @dataclass
 class SimulationConfig:
@@ -126,6 +133,11 @@ class SimulationConfig:
     traffic_direction_bias: float
     """Probability of selecting the canonical A→B direction after sorting a
     sampled satellite pair by satellite ID. 0.5 gives unbiased directions."""
+
+    operator_load_weights: dict[str, float]
+    """Relative offered-load weight for traffic sourced by each operator.
+    Equal weights preserve uniform active-pair allocation. Higher values skew
+    more generated flows toward that operator without changing arrival_rate."""
 
     random_seed: int
     """Default PRNG seed for all stochastic components (traffic generator,
@@ -240,6 +252,21 @@ def _validate(config: LIOSConfig) -> None:
     if not 0.0 <= sim.traffic_direction_bias <= 1.0:
         raise ValueError(
             "simulation.traffic_direction_bias must be between 0.0 and 1.0"
+        )
+    if any(
+        not isinstance(weight, (int, float))
+        or not math.isfinite(weight)
+        or weight < 0
+        for weight in sim.operator_load_weights.values()
+    ):
+        raise ValueError(
+            "simulation.operator_load_weights values must be finite and non-negative"
+        )
+    if sim.operator_load_weights and not any(
+        weight > 0 for weight in sim.operator_load_weights.values()
+    ):
+        raise ValueError(
+            "simulation.operator_load_weights must contain at least one positive value"
         )
 
 

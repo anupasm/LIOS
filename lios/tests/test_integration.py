@@ -18,7 +18,7 @@ from evaluation.metrics import MetricsCollector
 from ground.settlement_manager import SettlementManager
 from protocol.auth import ContactAuthSession
 from protocol.isl_state_machine import ISLStateMachine
-from protocol.offchain import OffChainProtocol, T_LOW_FRACTION
+from protocol.offchain import BalanceProof, OffChainProtocol, SettlementPayload, T_LOW_FRACTION
 from simulator.ground_station_node import FabricMock, GroundStationNode
 from simulator.satellite_node import SatelliteNode, create_satellite
 from simulator.simulator import EventLoop, EventType, SimEvent
@@ -90,6 +90,63 @@ class TestChannelEstablishment:
         assert "opB_opC_ch" in fabric._channels
         assert fabric._channels["opA_opB_ch"]["status"] == "OPEN"
         assert fabric._channels["opB_opC_ch"]["status"] == "OPEN"
+
+
+class TestFederatedGroundStations:
+    def test_gs_worker_allows_same_operator_satellite_contacts(self):
+        """GS visibility is physical; same-operator contacts are not filtered out."""
+        import numpy as np
+        from contact_plan.window_calculator import (
+            _geodetic_to_eci,
+            _gmst,
+            _gs_sat_worker,
+            _init_isl_worker,
+        )
+
+        epoch_jd, epoch_fr = 2451545.0, 0.0
+        gs_eci = _geodetic_to_eci(0.0, 0.0, 0.0, _gmst(epoch_jd, epoch_fr))
+        sat_eci = gs_eci / np.linalg.norm(gs_eci) * (6378.137 + 550.0)
+        pos_arr = np.array([[sat_eci, sat_eci]], dtype=float)
+        ts_arr = np.array([0.0, 30.0], dtype=float)
+        _init_isl_worker(pos_arr, ts_arr)
+
+        contacts = _gs_sat_worker((
+            "opA-gs1", "opA", 0.0, 0.0, 0.0, 5.0,
+            0, epoch_jd, epoch_fr, "opA-s1", "opA",
+        ))
+
+        assert len(contacts) == 1
+        assert contacts[0]["operator_from"] == "opA"
+        assert contacts[0]["operator_to"] == "opA"
+
+    def test_relay_gs_submits_as_satellite_operator(self):
+        """A peer physical GS acts as secure access for the satellite owner."""
+        from contact_plan.gs_loader import GroundStation
+
+        fabric = FabricMock()
+        isl_fsm = ISLStateMachine()
+        relay_gs = GroundStationNode(
+            GroundStation("opB-gs1", "opB", 0.0, 0.0),
+            fabric,
+            isl_fsm,
+        )
+        proof = BalanceProof(
+            channel_id=CH_AB,
+            seq_num=1,
+            balance_a_kb=BALANCE_KB - 100.0,
+            balance_b_kb=BALANCE_KB + 100.0,
+        )
+        payload = SettlementPayload(
+            channel_id=CH_AB,
+            latest_proof=proof,
+            log_bytes=b"",
+            contact_id="ISL-AB",
+            triggers_fired=["T7"],
+        )
+
+        relay_gs.receive_settlement_payload("opA-s1", payload, 10.0)
+
+        assert fabric._settlements[CH_AB]["submittedBy"] == "opA"
 
 
 class TestOffChainForwarding:

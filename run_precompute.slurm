@@ -13,15 +13,8 @@
 
 # ── Memory budget (adjust --mem if you hit OOM) ─────────────────────────────
 #
-#  Phase 2 (route table build): main process holds the full route_table dict
-#  in RAM while submitting to workers. Rough estimate: 2-5 GB for a 3-operator,
-#  ~150-sat constellation across 288 five-minute buckets.
-#
-#  Phase 3 (traffic): each worker independently json.load()s the full route
-#  table from the .json.gz file. With 32 workers and a 3 GB uncompressed table,
-#  peak RAM ≈ 32 × 3 GB = ~96 GB, plus the main process accumulating all_records.
-#  256 GB is conservative-safe; drop to 128 GB if the cluster is congested and
-#  you've confirmed your route table is small.
+#  Contact-plan propagation is parallel. Traffic generation uses the resulting
+#  contact windows directly and does not build or load a route table.
 #
 #  To check actual usage after a run:
 #    sacct -j $SLURM_JOB_ID --format=JobID,MaxRSS,Elapsed
