@@ -184,8 +184,8 @@ cp_24h_step30_range4000_meta.json
 tf_pair_v2_e20260614T000000_d0.500_w863a161b79_24h_s42_r0.300000_step30_range4000.json
 ```
 
-Copy the final contact plan, metadata, and traffic schedule into the cache used
-by `run_experiments.py`:
+For a later run outside Sonic, copy the final contact plan, metadata, and traffic
+schedule into the local cache:
 
 ```bash
 cd ~/LIOS
@@ -195,10 +195,51 @@ cp /scratch/$USER/lios_cache/cp_24h_step30_range4000_meta.json lios/cache/
 cp /scratch/$USER/lios_cache/tf_pair_v2_e20260614T000000_d0.500_w863a161b79_24h_s42_r0.300000_step30_range4000.json lios/cache/
 ```
 
-The experiment runner validates the contact epoch and uses the epoch and weight
-hash in the traffic filename, preventing incompatible caches from being loaded.
+This copy is not needed for Sonic's `run_experiments.slurm`, which reads the
+scratch cache directly. The experiment runner validates the contact epoch and
+uses the epoch and weight hash in the traffic filename, preventing incompatible
+caches from being loaded.
 
-## 8. Troubleshooting
+## 8. Run the experiments on Sonic
+
+After precompute completes, submit both enabled experiments:
+
+```bash
+cd ~/LIOS
+mkdir -p logs
+sbatch run_experiments.slurm
+```
+
+Run only LIOS:
+
+```bash
+sbatch run_experiments.slurm lios_constellation_weighted
+```
+
+Run only the ground-reset baseline:
+
+```bash
+sbatch run_experiments.slurm ground_reset_constellation_weighted
+```
+
+The experiment job reads precomputed artifacts directly from
+`/scratch/$USER/lios_cache`; copying them into the home directory is not
+required. Results are written to:
+
+```text
+/scratch/$USER/lios_results/JOB_ID
+```
+
+Monitor the experiment job with:
+
+```bash
+squeue -j JOB_ID
+tail -f logs/experiments_JOB_ID.out
+tail -f logs/experiments_JOB_ID.err
+sacct -j JOB_ID --format=JobID,JobName,State,Elapsed,MaxRSS,ExitCode
+```
+
+## 9. Troubleshooting
 
 ### Memory specification cannot be satisfied
 

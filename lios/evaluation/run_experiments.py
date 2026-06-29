@@ -404,6 +404,7 @@ def run_experiment(
     data_dir: Path = DATA_DIR,
     out_dir: Optional[Path] = None,
     use_blockchain: bool = False,
+    cache_dir: Path = CACHE_DIR,
 ) -> ExperimentResult:
     import time
     t0 = time.time()
@@ -415,7 +416,7 @@ def run_experiment(
         print(f"  [{label}]  ({elapsed:.1f}s)")
         _step_t = time.time()
 
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    cache_dir.mkdir(parents=True, exist_ok=True)
     print(
         f"\n[EXP] {config.name}: duration={config.duration_sec}s  "
         f"global_rate={config.traffic_arrival_rate}"
@@ -441,7 +442,9 @@ def run_experiment(
     epoch = CONTACT_PLAN_EPOCH
     from precompute import load_contact_plan, save_contact_plan
 
-    cp = load_contact_plan(CACHE_DIR, config.duration_sec, config.time_step_sec, config.isl_range_km)
+    cp = load_contact_plan(
+        cache_dir, config.duration_sec, config.time_step_sec, config.isl_range_km
+    )
     if cp is None:
         t_end = epoch + timedelta(seconds=config.duration_sec)
         steps_est = int(config.duration_sec / config.time_step_sec) + 1
@@ -454,7 +457,10 @@ def run_experiment(
             propagation_log_path=prop_log_path,
         )
         cp = calc.compute(operators_tles, ground_stations)
-        save_contact_plan(CACHE_DIR, cp, config.duration_sec, config.time_step_sec, config.isl_range_km)
+        save_contact_plan(
+            cache_dir, cp, config.duration_sec, config.time_step_sec,
+            config.isl_range_km,
+        )
     _step(f"2/8  contact plan: {len(cp.contacts)} contacts")
 
     if out_dir is not None:
@@ -554,7 +560,7 @@ def run_experiment(
 
     arrival_rate = config.traffic_arrival_rate
     schedule = load_traffic_schedule(
-        CACHE_DIR, config.random_seed, arrival_rate,
+        cache_dir, config.random_seed, arrival_rate,
         config.time_step_sec, config.isl_range_km, config.duration_sec,
         operator_load_weights,
     )
@@ -571,7 +577,7 @@ def run_experiment(
         schedule = tgen.generate_poisson_schedule(0.0, config.duration_sec)
         tgen_stats = tgen.stats
         save_traffic_schedule(
-            CACHE_DIR, schedule, config.random_seed, arrival_rate,
+            cache_dir, schedule, config.random_seed, arrival_rate,
             config.time_step_sec, config.isl_range_km, config.duration_sec,
             operator_load_weights,
         )
@@ -905,6 +911,7 @@ def main() -> None:
     parser.add_argument("--config", help="Run only this experiment (by name)")
     parser.add_argument("--out", default="results", help="Output directory")
     parser.add_argument("--data", default=str(DATA_DIR), help="Data directory")
+    parser.add_argument("--cache", default=str(CACHE_DIR), help="Cache directory")
     parser.add_argument(
         "--blockchain",
         action="store_true",
@@ -919,6 +926,7 @@ def main() -> None:
 
     out_dir = Path(args.out)
     data_dir = Path(args.data)
+    cache_dir = Path(args.cache)
     configs = EXPERIMENT_CONFIGS
     if args.config:
         configs = [c for c in EXPERIMENT_CONFIGS if c.name == args.config]
@@ -928,7 +936,13 @@ def main() -> None:
 
     results: List[ExperimentResult] = []
     for cfg in configs:
-        result = run_experiment(cfg, data_dir, out_dir=out_dir, use_blockchain=args.blockchain)
+        result = run_experiment(
+            cfg,
+            data_dir,
+            out_dir=out_dir,
+            use_blockchain=args.blockchain,
+            cache_dir=cache_dir,
+        )
         results.append(result)
 
         # Save raw metrics
