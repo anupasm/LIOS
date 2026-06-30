@@ -27,7 +27,7 @@ from protocol.offchain import BalanceProof, OffChainProtocol, SettlementPayload
 from simulator.simulator import EventType, SimEvent
 
 
-CHANNEL_BALANCE_KB = cfg.protocol.channel_balance_kb  # 10 MB per side (simulation); see config.toml
+CHANNEL_BALANCE_KB = cfg.protocol.channel_balance_kb  # 1 TB per side; see config.toml
 
 
 @dataclass
@@ -76,13 +76,15 @@ class SatelliteNode:
 
         # Pending settlement payloads to upload to GS on next contact
         self._pending_settlement: Dict[str, SettlementPayload] = {}
-        # ISL metadata stashed at trigger-fire time, consumed by _queue_and_maybe_upload
-        # to emit SETTLEMENT_QUEUED with the correct isl_prop_delay_sec.
+        # ISL metadata stashed at trigger-fire time, consumed by
+        # _queue_and_maybe_upload to measure the complete proof-signing exchange.
         self._settlement_meta: Dict[str, dict] = {}
         # Unacked notifications from GS
         self._pending_notif: List[NotificationBundle] = []
         # Active ISL contacts: peer_id → contact_id
         self._active_isls: Dict[str, str] = {}
+        # Active ISL geometry used to schedule per-update proof exchanges.
+        self._active_isl_info: Dict[str, dict] = {}
         # Active GS contacts: gs_id → {start_time, range_km, prop_delay_sec}
         # prop_delay_sec = range_km / c  (one-way propagation, Bhattacherjee & Singla CoNEXT 2019 §3.1)
         self._active_gs: Dict[str, dict] = {}
@@ -103,6 +105,8 @@ class SatelliteNode:
             return self._on_gs_contact_end(event)
         elif event.event_type == EventType.TRAFFIC_ARRIVE:
             return self._on_traffic_arrive(event)
+        elif event.event_type == EventType.TRAFFIC_RETRY:
+            return self._on_traffic_arrive(event)
         elif event.event_type == EventType.NOTIFICATION_DELIVER:
             return self._on_notification_deliver(event)
         elif event.event_type == EventType.PROOF_PROP:
@@ -121,6 +125,10 @@ class SatelliteNode:
 
         range_km = getattr(contact, "range_km", 0.0) if contact else 0.0
         isl_prop_delay_sec = range_km / cfg.link.c_km_s if range_km > 0 else 0.0
+        self._active_isl_info[peer_id] = {
+            "range_km": range_km,
+            "prop_delay_sec": isl_prop_delay_sec,
+        }
         self._log("ISL_OPEN", peer_id=peer_id, contact_id=contact_id, t=event.time,
                   isl_range_km=round(range_km, 3),
                   isl_prop_delay_sec=round(isl_prop_delay_sec, 6))
@@ -152,6 +160,7 @@ class SatelliteNode:
         t = event.time
 
         contact_id = self._active_isls.pop(peer_id, "")
+        self._active_isl_info.pop(peer_id, None)
 
         contact = event.payload
         range_km = getattr(contact, "range_km", 0.0) if contact else 0.0
@@ -197,6 +206,7 @@ class SatelliteNode:
                 self._settlement_meta[channel_id] = {
                     "isl_prop_delay_sec": isl_prop_delay_sec,
                     "isl_range_km": range_km,
+                    "proof_exchange_started_at": t,
                 }
 
                 if proof and proof.sig_a and proof.sig_b:
@@ -207,6 +217,13 @@ class SatelliteNode:
                 # The peer returns PROOF_ACK (also over the ISL) and we queue
                 # the settlement payload once both signatures are present.
                 self._pending_cosign[channel_id] = payload
+                self._log(
+                    "PROOF_PROP_SENT",
+                    channel_id=channel_id,
+                    seq_num=proof.seq_num,
+                    peer_id=peer_id,
+                    t=t,
+                )
                 return [SimEvent(
                     time=t + isl_prop_delay_sec,
                     event_type=EventType.PROOF_PROP,
@@ -315,6 +332,27 @@ class SatelliteNode:
             )
             return []
 
+        isl_delay = self._active_isl_info.get(next_hop, {}).get(
+            "prop_delay_sec", 0.0
+        )
+        busy_until = self._isl_fsm.proof_exchange_busy_until(channel_id)
+        if t < busy_until:
+            self._log(
+                "TRAFFIC_DEFERRED",
+                reason="proof_exchange_in_flight",
+                flow_id=flow.flow_id,
+                channel_id=channel_id,
+                retry_at=busy_until + 1e-6,
+                t=t,
+            )
+            return [SimEvent(
+                time=busy_until + 1e-6,
+                event_type=EventType.TRAFFIC_RETRY,
+                from_node=self.satellite_id,
+                to_node=self.satellite_id,
+                payload=flow,
+            )]
+
         if not self._protocol.can_forward(channel_id):
             self._log("TRAFFIC_DROPPED", reason="channel_not_active",
                       flow_id=flow.flow_id, contact_id=flow.contact_id,
@@ -358,6 +396,30 @@ class SatelliteNode:
                 bytes_kb=flow.size_kb,
                 t=t,
             )
+            self._isl_fsm.reserve_proof_exchange(
+                channel_id, t + 2.0 * isl_delay
+            )
+            self._log(
+                "PROOF_PROP_SENT",
+                channel_id=channel_id,
+                seq_num=proof.seq_num,
+                peer_id=next_hop,
+                exchange_type="balance_update",
+                t=t,
+            )
+            return [SimEvent(
+                time=t + isl_delay,
+                event_type=EventType.PROOF_PROP,
+                from_node=self.satellite_id,
+                to_node=next_hop,
+                payload={
+                    "channel_id": channel_id,
+                    "proof": proof,
+                    "sender_pub_key": self._priv.public_key(),
+                    "isl_prop_delay_sec": isl_delay,
+                    "balance_update": True,
+                },
+            )]
 
         return []
 
@@ -376,6 +438,7 @@ class SatelliteNode:
         sender_pub_key = data.get("sender_pub_key")
         isl_delay = data.get("isl_prop_delay_sec", 0.0)
         peer_triggers: List[str] = data.get("triggers", [])
+        balance_update = bool(data.get("balance_update"))
         t = event.time
 
         if proof is None or sender_pub_key is None:
@@ -387,15 +450,25 @@ class SatelliteNode:
             return []
 
         self._log("PROOF_PROP_COSIGNED", channel_id=channel_id,
-                  seq_num=cosigned.seq_num, t=t)
+                  seq_num=cosigned.seq_num, peer_id=event.from_node,
+                  exchange_type="balance_update" if balance_update else "settlement",
+                  t=t)
+        self._log("PROOF_ACK_SENT", channel_id=channel_id,
+                  seq_num=cosigned.seq_num, peer_id=event.from_node,
+                  exchange_type="balance_update" if balance_update else "settlement",
+                  t=t)
 
         new_events: List[SimEvent] = [SimEvent(
             time=t + isl_delay,
             event_type=EventType.PROOF_ACK,
             from_node=self.satellite_id,
             to_node=event.from_node,
-            payload={"channel_id": channel_id, "proof": cosigned},
+            payload={"channel_id": channel_id, "proof": cosigned,
+                     "balance_update": balance_update},
         )]
+
+        if balance_update:
+            return new_events
 
         # PROOF_PROP is only sent when the peer triggered settlement at contact-end.
         # Always cooperate: pause our channel and submit the co-signed proof to our GS
@@ -426,6 +499,7 @@ class SatelliteNode:
         data = event.payload or {}
         channel_id = data.get("channel_id", "")
         cosigned = data.get("proof")
+        balance_update = bool(data.get("balance_update"))
         t = event.time
 
         if cosigned is None:
@@ -436,13 +510,18 @@ class SatelliteNode:
                 ch_state.latest_proof.seq_num == cosigned.seq_num:
             ch_state.latest_proof = cosigned
 
+        self._log("PROOF_ACK_RECEIVED", channel_id=channel_id,
+                  seq_num=cosigned.seq_num,
+                  exchange_type="balance_update" if balance_update else "settlement",
+                  t=t)
+        if balance_update:
+            return []
+
         payload = self._pending_cosign.pop(channel_id, None)
         if payload is None:
             return []
 
         payload.latest_proof = cosigned
-        self._log("PROOF_ACK_RECEIVED", channel_id=channel_id,
-                  seq_num=cosigned.seq_num, t=t)
         return self._queue_and_maybe_upload(channel_id, payload, t)
 
     def _queue_and_maybe_upload(
@@ -451,14 +530,16 @@ class SatelliteNode:
         """Store payload and flush to GS immediately if a contact is already open."""
         meta = self._settlement_meta.pop(channel_id, {})
         # Only emit on the first call per settlement cycle (meta present).
-        # _on_proof_prop and _on_proof_ack both call this method; the second
-        # call would log isl_prop_delay_sec=0 and overwrite the correct value
-        # in _compute_latency_summary, so we skip it when meta is already gone.
+        # _on_proof_prop and _on_proof_ack can both call this method; only the
+        # initiating node owns metadata for the complete proposal/ACK exchange.
         if meta:
+            exchange_started_at = meta.get("proof_exchange_started_at", t)
             self._log(
                 "SETTLEMENT_QUEUED",
                 channel_id=channel_id,
+                seq_num=payload.latest_proof.seq_num,
                 isl_prop_delay_sec=round(meta["isl_prop_delay_sec"], 6),
+                offchain_latency_sec=round(t - exchange_started_at, 6),
                 isl_range_km=round(meta["isl_range_km"], 3),
                 t=t,
             )
@@ -496,6 +577,7 @@ class SatelliteNode:
                 self._isl_fsm.record_satellite_resume_ack(ch_id, self.satellite_id, event.time)
                 self._protocol.resume_channel(ch_id)
                 self._log("ISL_RESUMED", channel_id=ch_id, t=event.time,
+                          seq_num=self._protocol.get_channel(ch_id).seq_num,
                           gs_sent_at=bundle.generated_at,
                           downlink_prop_delay_sec=downlink_prop_delay_sec)
 

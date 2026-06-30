@@ -73,6 +73,7 @@ class ISLStateMachine:
 
     def __init__(self) -> None:
         self._channels: Dict[str, ISLChannelRecord] = {}
+        self._proof_exchange_busy_until: Dict[str, float] = {}
 
     def register_channel(self, channel_id: str, sat_a: str, sat_b: str) -> None:
         self._channels[channel_id] = ISLChannelRecord(
@@ -87,6 +88,14 @@ class ISLStateMachine:
 
     def can_forward(self, channel_id: str) -> bool:
         return self.get_status(channel_id) == ISLChannelStatus.ACTIVE
+
+    def proof_exchange_busy_until(self, channel_id: str) -> float:
+        """Return the end of the channel's current stop-and-wait exchange."""
+        return self._proof_exchange_busy_until.get(channel_id, 0.0)
+
+    def reserve_proof_exchange(self, channel_id: str, until: float) -> None:
+        """Serialize balance-proof updates shared by both channel endpoints."""
+        self._proof_exchange_busy_until[channel_id] = until
 
     # ── ACTIVE → PAUSED_PENDING_SETTLEMENT ─────────────────────────────────────
 

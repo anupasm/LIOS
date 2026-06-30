@@ -23,6 +23,7 @@ class EventType(str, Enum):
     GS_CONTACT_START = "GS_CONTACT_START"
     GS_CONTACT_END = "GS_CONTACT_END"
     TRAFFIC_ARRIVE = "TRAFFIC_ARRIVE"
+    TRAFFIC_RETRY = "TRAFFIC_RETRY"
     SETTLEMENT_TRIGGER = "SETTLEMENT_TRIGGER"
     SETTLEMENT_UPLOAD = "SETTLEMENT_UPLOAD"
     PROOF_PROP = "PROOF_PROP"   # half-signed proof sent from forwarder to peer for cosigning

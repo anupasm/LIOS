@@ -46,12 +46,11 @@ class ProtocolConfig:
 
     t_low_fraction: float
     """T1 trigger threshold: settlement fires when either side's balance falls
-    below this fraction of the initial channel capacity (default 20 %)."""
+    below this fraction of total bilateral channel capacity (default 5 %)."""
 
     s_max_kb: int
     """T7 trigger threshold: cumulative bytes forwarded in one session (KB).
-    Must be < channel_balance_kb so T7 can fire before T1 exhausts the channel.
-    Default 20 480 KB (2× channel_balance_kb = one full channel cycle)."""
+    The production default is 100 GB, limiting unsettled session exposure."""
 
     t_challenge_sec: float
     """On-chain challenge window after initiateSettlement() (seconds).
@@ -65,7 +64,7 @@ class ProtocolConfig:
     channel_balance_kb: int
     """Initial channel balance allocated to each side at open time (KB).
     Total channel capacity = 2 × this value.
-    Simulation default: 10 240 KB (10 MB). Production target: 1 TB per side.
+    Default: 1 TB per side (1,000,000,000 KB in decimal units).
     flow_size_max_kb must be ≤ this value to avoid guaranteed flow drops."""
 
     timestamp_tolerance_sec: float

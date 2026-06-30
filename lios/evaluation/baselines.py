@@ -25,7 +25,7 @@ from protocol.isl_state_machine import ISLChannelStatus
 from protocol.offchain import BalanceProof, SettlementPayload
 from simulator.ground_station_node import FabricMock, GroundStationNode
 from simulator.satellite_node import SatelliteNode
-from simulator.simulator import EventType, SimEvent
+from simulator.simulator import SimEvent
 
 
 # ── A.1  No-Protocol Greedy ────────────────────────────────────────────────────
@@ -207,6 +207,7 @@ class CentralSatelliteNode(SatelliteNode):
         self._settlement_meta[channel_id] = {
             "isl_prop_delay_sec": isl_prop_delay,
             "isl_range_km": range_km,
+            "proof_exchange_started_at": t,
         }
 
         # Optimistic balance reset — no ISL pause, no waiting for GS ack.
@@ -254,7 +255,8 @@ class CentralGroundStationNode(GroundStationNode):
         # CentralFabricMock.initiate_settlement immediately calls finalize_settlement.
         self._fabric.initiate_settlement(ch_id, proof, self.operator_id, t)
         self._isl_fsm.on_settlement_finalized(ch_id)
-        self._log("SETTLEMENT_FINALIZED", channel_id=ch_id, t=t)
+        self._log("SETTLEMENT_FINALIZED", channel_id=ch_id,
+                  seq_num=proof.seq_num, t=t)
 
         # No ISL_RESUME queued: CentralSatelliteNode already reset balance optimistically.
         return []
@@ -266,8 +268,8 @@ class GroundResetFabricMock(FabricMock):
     """Ledger model for the contact-end ground-reset baseline.
 
     A channel reset is committed only after both endpoint satellites have uploaded
-    the same contact-end balance proof through a ground station.  Until that
-    happens, the satellite channel remains paused and future ISLs are blocked.
+    their contact-end balance reports through a ground station.  The ledger nets
+    the two independently reported forwarding totals into one final balance.
     """
 
     def __init__(self) -> None:
@@ -285,21 +287,37 @@ class GroundResetFabricMock(FabricMock):
         pending = self._ground_reset_pending.setdefault(
             sat_pair_id,
             {
-                "proof": proof,
                 "submittedBy": submitted_by,
                 "submittedAt": t,
-                "satellites": set(),
+                "reports": {},
             },
         )
-        pending["satellites"].add(sat_id)
+        pending["reports"][sat_id] = proof
 
         endpoints = set(sat_pair_id.split("__"))
-        if not endpoints.issubset(pending["satellites"]):
-            return "WAITING_FOR_PEER", set(pending["satellites"])
+        reports = pending["reports"]
+        if not endpoints.issubset(reports):
+            return "WAITING_FOR_PEER", set(reports)
 
-        self.submit_balance_reset(sat_pair_id, proof, submitted_by, t)
+        sat_a, sat_b = sat_pair_id.split("__")
+        proof_a = reports[sat_a]
+        proof_b = reports[sat_b]
+        capacity_a = proof_a.balance_a_kb + proof_a.balance_b_kb
+        capacity_b = proof_b.balance_a_kb + proof_b.balance_b_kb
+        if abs(capacity_a - capacity_b) > 1e-6:
+            raise ValueError(f"ground-reset capacity mismatch for {sat_pair_id}")
+
+        initial_balance = capacity_a / 2.0
+        combined = BalanceProof(
+            channel_id=sat_pair_id,
+            seq_num=max(proof_a.seq_num, proof_b.seq_num),
+            balance_a_kb=proof_a.balance_a_kb + proof_b.balance_a_kb - initial_balance,
+            balance_b_kb=proof_a.balance_b_kb + proof_b.balance_b_kb - initial_balance,
+        )
+
+        self.submit_balance_reset(sat_pair_id, combined, submitted_by, t)
         self._settlements[sat_pair_id]["status"] = "RESET"
-        self._settlements[sat_pair_id]["ground_reset_sats"] = sorted(pending["satellites"])
+        self._settlements[sat_pair_id]["ground_reset_sats"] = sorted(reports)
         self._ground_reset_pending.pop(sat_pair_id, None)
         return "RESET_COMMITTED", endpoints
 
@@ -307,15 +325,16 @@ class GroundResetFabricMock(FabricMock):
 class GroundResetSatelliteNode(SatelliteNode):
     """Baseline: every cross-operator contact-end requires a ground reset.
 
-    When contact traffic changed the bilateral balance, both satellites pause the
-    channel and upload the co-signed proof to ground.  No subsequent ISL with the
-    peer is established until the ledger reset has committed and both satellites
+    Traffic is counted during the contact without producing per-flow balance
+    proofs.  At every contact end, each satellite applies its aggregate forwarding
+    total once and uploads that single report to ground.  No subsequent ISL with
+    the peer is established until both reports are committed and both satellites
     receive their ground resume notification.
     """
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._last_ground_reset_seq: Dict[str, int] = {}
+        self._contact_forwarded_kb: Dict[str, float] = {}
 
     def _on_isl_open(self, event: SimEvent) -> List[SimEvent]:
         peer_id = event.from_node if event.to_node == self.satellite_id else event.to_node
@@ -339,7 +358,49 @@ class GroundResetSatelliteNode(SatelliteNode):
                 )
                 return []
 
-        return super()._on_isl_open(event)
+        events = super()._on_isl_open(event)
+        if peer_id in self._active_isls:
+            self._contact_forwarded_kb[peer_id] = 0.0
+        return events
+
+    def _on_traffic_arrive(self, event: SimEvent) -> List[SimEvent]:
+        """Forward traffic while deferring balance accounting to contact end."""
+        flow = event.payload
+        if flow is None:
+            return []
+        t = event.time
+        if flow.src_satellite != self.satellite_id:
+            self._log("TRAFFIC_DROPPED", reason="wrong_source_satellite",
+                      flow_id=flow.flow_id, t=t)
+            return []
+
+        peer_id = flow.dst_satellite
+        channel_id = self._channel_id(peer_id)
+        if peer_id not in self._active_isls:
+            self._log("TRAFFIC_DROPPED", reason="no_active_isl_contact",
+                      flow_id=flow.flow_id, contact_id=flow.contact_id,
+                      channel_id=channel_id, next_hop=peer_id, t=t)
+            return []
+
+        if not self._is_same_operator(peer_id):
+            if not self._protocol.can_forward(channel_id):
+                self._log("TRAFFIC_DROPPED", reason="channel_not_active",
+                          flow_id=flow.flow_id, contact_id=flow.contact_id,
+                          channel_id=channel_id, next_hop=peer_id, t=t)
+                return []
+            state = self._protocol.get_channel(channel_id)
+            pending_kb = self._contact_forwarded_kb.get(peer_id, 0.0)
+            if state is None or state.my_balance() < pending_kb + flow.size_kb:
+                self._log("TRAFFIC_DROPPED", reason="insufficient_balance",
+                          flow_id=flow.flow_id, contact_id=flow.contact_id,
+                          channel_id=channel_id, t=t)
+                return []
+            self._contact_forwarded_kb[peer_id] = pending_kb + flow.size_kb
+
+        self._log("TRAFFIC_FORWARDED", flow_id=flow.flow_id, peer_id=peer_id,
+                  contact_id=flow.contact_id, bytes_kb=flow.size_kb, t=t,
+                  channel_id=channel_id)
+        return []
 
     def _on_isl_close(self, event: SimEvent) -> List[SimEvent]:
         peer_id = event.from_node if event.to_node == self.satellite_id else event.to_node
@@ -348,6 +409,7 @@ class GroundResetSatelliteNode(SatelliteNode):
         range_km = getattr(contact, "range_km", 0.0) if contact else 0.0
         isl_prop_delay_sec = range_km / cfg.link.c_km_s if range_km > 0 else 0.0
         contact_id = self._active_isls.pop(peer_id, "")
+        forwarded_kb = self._contact_forwarded_kb.pop(peer_id, 0.0)
 
         self._log("ISL_CLOSE", peer_id=peer_id, contact_id=contact_id, t=t,
                   isl_range_km=round(range_km, 3),
@@ -361,19 +423,7 @@ class GroundResetSatelliteNode(SatelliteNode):
         if ch_state is None or ch_state.status == "PAUSED":
             return []
 
-        latest = ch_state.latest_proof
-        last_reset_seq = self._last_ground_reset_seq.get(channel_id, 0)
-        if latest is None or latest.seq_num <= last_reset_seq:
-            if self.satellite_id > peer_id:
-                self._log(
-                    "GROUND_RESET_WAITING_FOR_PEER_PROOF",
-                    channel_id=channel_id,
-                    contact_id=contact_id,
-                    seq_num=latest.seq_num if latest else None,
-                    t=t,
-                )
-                return []
-            latest = self._build_contact_end_proof(ch_state)
+        latest = self._build_contact_end_proof(ch_state, forwarded_kb, t)
 
         self._isl_fsm.record_contact_end_pause(
             channel_id, t, self.operator_id, "GROUND_RESET"
@@ -390,8 +440,10 @@ class GroundResetSatelliteNode(SatelliteNode):
         payload.reset_requested = True
 
         self._settlement_meta[channel_id] = {
-            "isl_prop_delay_sec": isl_prop_delay_sec,
+            # Reports travel only through GS links; there is no ISL proof exchange.
+            "isl_prop_delay_sec": 0.0,
             "isl_range_km": range_km,
+            "proof_exchange_started_at": t,
         }
         self._log(
             "GROUND_RESET_TRIGGERED",
@@ -403,27 +455,18 @@ class GroundResetSatelliteNode(SatelliteNode):
             t=t,
         )
 
-        if latest.is_fully_signed():
-            return self._queue_and_maybe_upload(channel_id, payload, t)
+        return self._queue_and_maybe_upload(channel_id, payload, t)
 
-        self._pending_cosign[channel_id] = payload
-        return [SimEvent(
-            time=t + isl_prop_delay_sec,
-            event_type=EventType.PROOF_PROP,
-            from_node=self.satellite_id,
-            to_node=peer_id,
-            payload={
-                "channel_id": channel_id,
-                "proof": latest,
-                "sender_pub_key": self._priv.public_key(),
-                "isl_prop_delay_sec": isl_prop_delay_sec,
-                "triggers": ["CONTACT_END_GROUND_RESET"],
-                "ground_reset": True,
-            },
-        )]
-
-    def _build_contact_end_proof(self, ch_state) -> BalanceProof:
-        """Create a signed same-balance snapshot for a zero-traffic contact."""
+    def _build_contact_end_proof(
+        self, ch_state, forwarded_kb: float, t: float
+    ) -> BalanceProof:
+        """Apply one aggregate contact balance update and sign its ground report."""
+        if ch_state.my_role == "A":
+            ch_state.balance_a_kb -= forwarded_kb
+            ch_state.balance_b_kb += forwarded_kb
+        else:
+            ch_state.balance_b_kb -= forwarded_kb
+            ch_state.balance_a_kb += forwarded_kb
         proof = BalanceProof(
             channel_id=ch_state.channel_id,
             seq_num=ch_state.seq_num + 1,
@@ -436,89 +479,25 @@ class GroundResetSatelliteNode(SatelliteNode):
         else:
             proof.sig_b = sig
         ch_state.seq_num = proof.seq_num
+        ch_state.cumulative_kb_forwarded += forwarded_kb
         ch_state.latest_proof = proof
         self._log(
-            "GROUND_RESET_CONTACT_SNAPSHOT",
+            "GROUND_RESET_CONTACT_BALANCE_UPDATE",
             channel_id=ch_state.channel_id,
             seq_num=proof.seq_num,
             balance_a_kb=proof.balance_a_kb,
             balance_b_kb=proof.balance_b_kb,
+            forwarded_kb=forwarded_kb,
+            t=t,
         )
         return proof
-
-    def _on_proof_prop(self, event: SimEvent) -> List[SimEvent]:
-        data = event.payload or {}
-        if not data.get("ground_reset"):
-            return super()._on_proof_prop(event)
-
-        channel_id = data.get("channel_id", "")
-        proof = data.get("proof")
-        sender_pub_key = data.get("sender_pub_key")
-        isl_delay = data.get("isl_prop_delay_sec", 0.0)
-        t = event.time
-        if proof is None or sender_pub_key is None:
-            return []
-
-        cosigned = self._protocol.cosign_proof(channel_id, proof, sender_pub_key)
-        if cosigned is None:
-            self._log("PROOF_PROP_REJECTED", channel_id=channel_id, t=t)
-            return []
-
-        self._log("PROOF_PROP_COSIGNED", channel_id=channel_id,
-                  seq_num=cosigned.seq_num, t=t)
-
-        new_events: List[SimEvent] = [SimEvent(
-            time=t + isl_delay,
-            event_type=EventType.PROOF_ACK,
-            from_node=self.satellite_id,
-            to_node=event.from_node,
-            payload={"channel_id": channel_id, "proof": cosigned},
-        )]
-
-        ch_state = self._protocol.get_channel(channel_id)
-        if ch_state and ch_state.status != "PAUSED":
-            self._isl_fsm.record_contact_end_pause(
-                channel_id, t, self.operator_id, "GROUND_RESET"
-            )
-            self._protocol.pause_channel(channel_id)
-            payload = self._protocol.get_settlement_payload(channel_id)
-            if payload:
-                payload.latest_proof = cosigned
-                payload.triggers_fired = ["CONTACT_END_GROUND_RESET"]
-                payload.reset_requested = True
-                payload.queued_at = t
-                new_events += self._queue_and_maybe_upload(channel_id, payload, t)
-
-        return new_events
-
-    def _on_proof_ack(self, event: SimEvent) -> List[SimEvent]:
-        events = super()._on_proof_ack(event)
-        data = event.payload or {}
-        channel_id = data.get("channel_id", "")
-        payload = self._pending_settlement.get(channel_id)
-        if payload is not None:
-            payload.triggers_fired = ["CONTACT_END_GROUND_RESET"]
-            payload.reset_requested = True
-        return events
-
-    def _on_notification_deliver(self, event: SimEvent) -> List[SimEvent]:
-        bundle = event.payload
-        if bundle:
-            for notif in bundle.notifications:
-                if notif.get("type") == "ISL_RESUME":
-                    ch_id = notif.get("satChannelId", "")
-                    state = self._protocol.get_channel(ch_id)
-                    if state:
-                        self._last_ground_reset_seq[ch_id] = state.seq_num
-        return super()._on_notification_deliver(event)
-
 
 class GroundResetGroundStationNode(GroundStationNode):
     """Ground node for the contact-end reset baseline.
 
-    The first endpoint upload is retained in the central mock ledger.  The second
-    endpoint upload commits the ledger reset and queues resume notifications for
-    both satellites.
+    The first endpoint's contact-end report is retained in the central mock
+    ledger.  The second report is netted with it, commits the balance reset, and
+    queues resume notifications for both satellites.
     """
 
     def receive_settlement_payload(
@@ -571,8 +550,10 @@ class GroundResetGroundStationNode(GroundStationNode):
 
         commit_latency = self._fabric.commit_latency_sec
         self._isl_fsm.on_settlement_finalized(ch_id)
-        self._log("BALANCE_RESET_SUBMITTED", channel_id=ch_id, t=t)
-        self._log("SETTLEMENT_FINALIZED", channel_id=ch_id, t=t + commit_latency,
+        self._log("BALANCE_RESET_SUBMITTED", channel_id=ch_id,
+                  seq_num=proof.seq_num, t=t)
+        self._log("SETTLEMENT_FINALIZED", channel_id=ch_id,
+                  seq_num=proof.seq_num, t=t + commit_latency,
                   via="ground_reset_both_sats")
 
         for endpoint_sat in ch_id.split("__"):

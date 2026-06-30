@@ -148,7 +148,9 @@ class FabricMock:
                         "detection_latency": 0.0,
                     })
                     return {"status": "REJECTED_STALE", "tx_id": ""}
-                return {"status": "ALREADY_FINALIZED", "tx_id": existing["tx_id"]}
+                if proof.seq_num == existing["proof"]["seq_num"]:
+                    return {"status": "ALREADY_FINALIZED", "tx_id": existing["tx_id"]}
+                # A newer proof starts a distinct settlement cycle below.
 
         # First submission — start Tch window.
         tx_id = str(uuid.uuid4())
@@ -299,7 +301,9 @@ class GroundStationNode:
         )
         self._crl_delta: List[str] = []
         # Channels for which this GS has already queued ISL_RESUME (prevents re-delivery).
-        self._notified_channels: Set[str] = set()
+        # Idempotency is per settlement cycle, not per channel: the same channel
+        # may settle again later with a higher proof sequence number.
+        self._notified_channels: Set[tuple[str, Optional[int]]] = set()
         # operator_id → gs_id registry — injected after all GS nodes are built.
         self.gs_registry: Dict[str, str] = {}
         # sat_id → {range_km, prop_delay_sec} for the current contact window
@@ -398,6 +402,7 @@ class GroundStationNode:
         """
         ch_id = payload.channel_id
         proof = payload.latest_proof
+        settlement_key = (ch_id, proof.seq_num)
         settlement_operator = self._operator_for_satellite(sat_id)
 
         # Always store the latest proof from our satellite for future challenge detection.
@@ -447,13 +452,16 @@ class GroundStationNode:
             # this channel submits on-chain; the peer GS sends SETTLEMENT_TRIGGER
             # FINALIZED which puts the channel in _notified_channels.  If that trigger
             # already arrived before our satellite uploaded, skip the duplicate call.
-            if ch_id not in self._notified_channels:
+            if settlement_key not in self._notified_channels:
                 self._fabric.submit_balance_reset(ch_id, proof, settlement_operator, t)
                 commit_latency = self._fabric.commit_latency_sec
                 self._isl_fsm.on_settlement_finalized(ch_id)
-                self._log("BALANCE_RESET_SUBMITTED", channel_id=ch_id, t=t)
-                self._log("SETTLEMENT_FINALIZED", channel_id=ch_id, t=t + commit_latency, via="balance_reset")
-                self._notified_channels.add(ch_id)
+                self._log("BALANCE_RESET_SUBMITTED", channel_id=ch_id,
+                          seq_num=proof.seq_num, t=t)
+                self._log("SETTLEMENT_FINALIZED", channel_id=ch_id,
+                          seq_num=proof.seq_num, t=t + commit_latency,
+                          via="balance_reset")
+                self._notified_channels.add(settlement_key)
                 for other_sat in ch_id.split("__"):
                     other_op = other_sat.split("-")[0] if "-" in other_sat else ""
                     if other_op and other_op != settlement_operator:
@@ -464,7 +472,9 @@ class GroundStationNode:
                                 event_type=EventType.SETTLEMENT_TRIGGER,
                                 from_node=self.gs_id,
                                 to_node=peer_gs_id,
-                                payload={"sat_channel_id": ch_id, "reset": True, "trigger_type": "FINALIZED"},
+                                payload={"sat_channel_id": ch_id,
+                                         "seq_num": proof.seq_num, "reset": True,
+                                         "trigger_type": "FINALIZED"},
                             ))
             else:
                 self._log("BALANCE_RESET_ALREADY_COMMITTED", channel_id=ch_id, t=t)
@@ -494,12 +504,13 @@ class GroundStationNode:
         if status in ("MUTUAL_FINALIZED", "CHALLENGED"):
             # Immediate finalization — both parties agree (or rollback caught).
             self._isl_fsm.on_settlement_finalized(ch_id)
-            self._log("SETTLEMENT_FINALIZED", channel_id=ch_id, t=t + commit_latency, via=status)
+            self._log("SETTLEMENT_FINALIZED", channel_id=ch_id,
+                      seq_num=proof.seq_num, t=t + commit_latency, via=status)
             if sat_id:
                 self._pending_to_satellites.setdefault(sat_id, []).append({
                     "type": "ISL_RESUME", "satChannelId": ch_id, "timestamp": t,
                 })
-            self._notified_channels.add(ch_id)
+            self._notified_channels.add(settlement_key)
             for other_sat in ch_id.split("__"):
                 other_op = other_sat.split("-")[0] if "-" in other_sat else ""
                 if other_op and other_op != settlement_operator:
@@ -510,7 +521,9 @@ class GroundStationNode:
                             event_type=EventType.SETTLEMENT_TRIGGER,
                             from_node=self.gs_id,
                             to_node=peer_gs_id,
-                            payload={"sat_channel_id": ch_id, "reset": False, "trigger_type": "FINALIZED"},
+                            payload={"sat_channel_id": ch_id,
+                                     "seq_num": proof.seq_num, "reset": False,
+                                     "trigger_type": "FINALIZED"},
                         ))
 
         elif status == "NEW_PENDING":
@@ -521,7 +534,8 @@ class GroundStationNode:
                 event_type=EventType.CHALLENGE_WINDOW_EXPIRE,
                 from_node=self.gs_id,
                 to_node=self.gs_id,
-                payload={"sat_channel_id": ch_id, "sat_id": sat_id},
+                payload={"sat_channel_id": ch_id, "seq_num": proof.seq_num,
+                         "sat_id": sat_id},
             ))
             for other_sat in ch_id.split("__"):
                 other_op = other_sat.split("-")[0] if "-" in other_sat else ""
@@ -559,6 +573,8 @@ class GroundStationNode:
         send ISL_RESUME to our satellite plus a FINALIZED trigger to the peer GS."""
         payload = event.payload or {}
         ch_id = payload.get("sat_channel_id", "")
+        seq_num = payload.get("seq_num")
+        settlement_key = (ch_id, seq_num)
         sat_id = payload.get("sat_id")
         if not ch_id:
             return []
@@ -571,16 +587,17 @@ class GroundStationNode:
             self._fabric.finalize_settlement(ch_id, t)
             self._isl_fsm.on_settlement_finalized(ch_id)
             self._log("SETTLEMENT_FINALIZED", channel_id=ch_id,
+                      seq_num=rec.get("proof", {}).get("seq_num"),
                       t=t + self._fabric.commit_latency_sec, via="tch_expiry")
 
         # Queue ISL_RESUME for our satellite (idempotent guard via _notified_channels).
         new_events: List[SimEvent] = []
-        if ch_id not in self._notified_channels:
+        if settlement_key not in self._notified_channels:
             if sat_id:
                 self._pending_to_satellites.setdefault(sat_id, []).append({
                     "type": "ISL_RESUME", "satChannelId": ch_id, "timestamp": t,
                 })
-            self._notified_channels.add(ch_id)
+            self._notified_channels.add(settlement_key)
             for other_sat in ch_id.split("__"):
                 other_op = other_sat.split("-")[0] if "-" in other_sat else ""
                 if other_op and other_op != settlement_operator:
@@ -591,7 +608,8 @@ class GroundStationNode:
                             event_type=EventType.SETTLEMENT_TRIGGER,
                             from_node=self.gs_id,
                             to_node=peer_gs_id,
-                            payload={"sat_channel_id": ch_id, "reset": False, "trigger_type": "FINALIZED"},
+                            payload={"sat_channel_id": ch_id, "seq_num": seq_num,
+                                     "reset": False, "trigger_type": "FINALIZED"},
                         ))
         return new_events
 
@@ -629,6 +647,8 @@ class GroundStationNode:
             return []
         t = event.time
         trigger_type = payload.get("trigger_type", "FINALIZED")  # backward-compat default
+        seq_num = payload.get("seq_num", payload.get("submitted_seq"))
+        settlement_key = (ch_id, seq_num)
 
         if trigger_type == "INITIATED":
             submitted_seq = payload.get("submitted_seq", -1)
@@ -641,32 +661,34 @@ class GroundStationNode:
                 if challenged:
                     self._log("CHALLENGE_SUBMITTED", channel_id=ch_id,
                               honest_seq=latest.seq_num, attack_seq=submitted_seq, t=t)
-                    self._log("SETTLEMENT_FINALIZED", channel_id=ch_id, t=t, via="CHALLENGED")
+                    self._log("SETTLEMENT_FINALIZED", channel_id=ch_id,
+                              seq_num=latest.seq_num, t=t, via="CHALLENGED")
                     # Finalize immediately from our side and queue ISL_RESUME.
                     self._isl_fsm.on_settlement_finalized(ch_id)
-                    if ch_id not in self._notified_channels:
+                    challenged_key = (ch_id, latest.seq_num)
+                    if challenged_key not in self._notified_channels:
                         for sat in ch_id.split("__"):
                             if sat.split("-")[0] == self.operator_id:
                                 self._pending_to_satellites.setdefault(sat, []).append({
                                     "type": "ISL_RESUME", "satChannelId": ch_id, "timestamp": t,
                                 })
-                        self._notified_channels.add(ch_id)
+                        self._notified_channels.add(challenged_key)
             return []
 
         # FINALIZED (or legacy): queue ISL_RESUME for our satellite.
-        if ch_id in self._notified_channels:
+        if settlement_key in self._notified_channels:
             return []
         is_reset = payload.get("reset", False)
         self._log(
             "PEER_RESET_NOTIFIED" if is_reset else "PEER_SETTLEMENT_NOTIFIED",
-            channel_id=ch_id, from_gs=event.from_node, t=t,
+            channel_id=ch_id, seq_num=seq_num, from_gs=event.from_node, t=t,
         )
         for sat in ch_id.split("__"):
             if sat.split("-")[0] == self.operator_id:
                 self._pending_to_satellites.setdefault(sat, []).append({
                     "type": "ISL_RESUME", "satChannelId": ch_id, "timestamp": t,
                 })
-                self._notified_channels.add(ch_id)
+                self._notified_channels.add(settlement_key)
         return []
 
     # ── Helpers ────────────────────────────────────────────────────────────────

@@ -150,20 +150,21 @@ speed of light.
 
 | Setting | Effective value |
 |---|---:|
-| Initial bilateral balance per satellite side | 10,240 KB |
-| Total initial bilateral channel pool | 20,480 KB |
-| Low-balance trigger fraction | 0.2 of total pool |
-| Effective T1 threshold | 4,096 KB on either side |
-| Session-volume T7 threshold | 4,915 KB |
-| Challenge window | 3,600 s |
+| Initial bilateral balance per satellite side | 1,000,000,000 KB (1 TB) |
+| Total initial bilateral channel pool | 2,000,000,000 KB (2 TB) |
+| Low-balance trigger fraction | 0.05 of total pool |
+| Effective T1 threshold | 100,000,000 KB (100 GB) on either side |
+| Session-volume T7 threshold | 100,000,000 KB (100 GB) |
+| Challenge window | 172,800 s (48 h) |
 | Top-up confirmation deadline | 86,400 s |
 | Authentication timestamp tolerance | 30 s |
 | ECDH nonce length | 32 bytes |
 | Satellite certificate validity | 90 days |
 
 Each operator receives an operator CA. Satellite certificates and operational
-keys are created before simulation. Balance proofs are signed by both endpoint
-satellites before settlement or reset.
+keys are created before simulation. LIOS settlement proofs are signed by both
+endpoint satellites. Ground-reset reports are signed independently by each
+endpoint and reconciled by the ground ledger.
 
 Adversarial behavior is disabled. The dormant defaults are rollback attack
 probability `0.5` and selective-forward drop probability `0.3`.
@@ -175,8 +176,8 @@ implementations.
 
 1. Traffic updates the bilateral off-chain balance and monotonic sequence number.
 2. At cross-operator contact end, LIOS evaluates T1 and T7.
-3. T1 fires if either side falls below 4,096 KB.
-4. T7 fires when cumulative session forwarding reaches 4,915 KB.
+3. T1 fires if either side falls below 100,000,000 KB (100 GB).
+4. T7 fires when cumulative session forwarding reaches 100,000,000 KB (100 GB).
 5. If a trigger fires, both endpoints co-sign the latest proof and pause the
    channel while settlement is uploaded at a subsequent ground contact.
 6. T1 requests a balance reset. T7 performs settlement without requesting the
@@ -191,16 +192,17 @@ No settlement is performed between satellites belonging to the same operator.
 The baseline uses `GroundResetSatelliteNode`, `GroundResetGroundStationNode`, and
 `GroundResetFabricMock`.
 
-1. Every established cross-operator ISL contact end triggers a co-signed balance
-   snapshot and ground reset, including contacts that carried no traffic.
-2. Both endpoint channels pause as part of the contact-end proof exchange.
-3. Each endpoint satellite must independently upload the same co-signed proof
-   during a ground-station contact.
-4. The first upload remains pending. The ledger commits the reset only after both
-   endpoint satellite IDs have uploaded.
+1. Traffic is forwarded without per-flow off-chain balance or proof updates.
+2. Every established cross-operator ISL contact end applies one aggregate balance
+   update per endpoint, including a zero-byte update for contacts with no traffic.
+3. Both endpoint channels pause and each endpoint independently uploads its
+   contact-end report during a ground-station contact; there is no ISL proof
+   exchange.
+4. The first upload remains pending. After both endpoint reports arrive, the
+   ledger nets their forwarding totals and commits the resulting balance reset.
 5. Until commit and ground delivery of resume notifications to both endpoints,
    subsequent ISL opens for that satellite pair are rejected.
-6. On resume, both channel balances return to 10,240 KB and cumulative forwarded
+6. On resume, both channel balances return to 1,000,000,000 KB and cumulative forwarded
    volume returns to zero.
 
 The in-memory ledger applies the configured 2 s commit latency to finalization
@@ -214,7 +216,7 @@ in-memory ledger settings are:
 | Setting | Value |
 |---|---:|
 | Simulated commit latency | 2.0 s |
-| Operator channel balance per side | 1,000,000,000 KB |
+| Operator channel balance per side | 1,000,000,000,000 KB (1 PB) |
 | Operator penalty reserve | 10,000,000 KB |
 | Real Fabric network config | `lios/blockchain/network_config.json` |
 

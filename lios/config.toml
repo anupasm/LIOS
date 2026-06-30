@@ -14,28 +14,25 @@
 
 [protocol]
 
-# T1 trigger: balance below this fraction of initial_capacity triggers settlement
-t_low_fraction = 0.2           # 20 %
+# T1 trigger: balance below this fraction of total channel capacity.
+# With 1 TB per side, this fires when either side falls below 100 GB.
+t_low_fraction = 0.05          # 5 % of the 2 TB channel pool
 
 # T7 trigger: cumulative bytes forwarded in one session (KB).
-# Must be < channel_balance_kb × (1 − t_low_fraction) otherwise T1 always fires first.
-# usable per side = 10_240 × 0.6 = 6_144 KB → s_max must be < 6_144 to be reachable.
-# 4_915 KB ≈ 80% of usable balance → T7 fires after ~2–3 flows, before T1.
-s_max_kb = 4_915
+# 100 GB limits unsettled exposure while remaining well below the 900 GB that
+# one side can spend before T1 (B - 2B*f, where B is the per-side balance).
+s_max_kb = 100_000_000
 
 # On-chain challenge window after initiateSettlement() (seconds).
-# Protocol spec: 48 h (172_800).  Reduced to 3 600 s (1 h) so the fallback
-# CHALLENGE_WINDOW_EXPIRE path completes within the shortest simulation
-# (baseline = 3 600 s).  The mutual-finalization path (both GS submit) makes
-# this window irrelevant for honest runs; it only matters for adversarial tests.
-t_challenge_sec = 3_600.0
+# 48 h allows the peer to observe and challenge through intermittent GS access.
+t_challenge_sec = 172_800.0
 
 # Deadline for top-up confirmation by counterpart GS (seconds).  24 h
 t_topup_confirm_sec = 86_400.0
 
 # Initial channel balance per side (KB).
-# 10 MB for simulation (production would use 1 TB = 1_048_576 KB).
-channel_balance_kb = 10_240
+# Decimal units: 1 TB = 1,000,000,000 KB.
+channel_balance_kb = 1_000_000_000
 
 # Auth handshake: maximum clock skew between satellites (seconds)
 timestamp_tolerance_sec = 30.0
@@ -205,11 +202,10 @@ random_seed = 42
 p_attack = 0.5
 
 # Traffic flow size bounds for the log-normal size distribution (KB)
-# Lower clamp: minimum flow size.  10 KB = one small chunk.
+# Lower clamp: minimum flow size.  1,024 KB is approximately 1 MB.
 flow_size_min_kb = 1024
-# Upper clamp: must be ≤ channel_balance_kb or flows will always be dropped
-# (satellite_node drops any flow where size_kb > current channel balance).
-# 10_240 KB = 10 MB matches channel_balance_kb exactly.
+# Upper clamp: must be ≤ channel_balance_kb or flows will always be dropped.
+# Individual flows remain bounded at about 10 MB; channel capacity is 1 TB.
 flow_size_max_kb = 10_240
 
 # ── Cryptographic PKI ──────────────────────────────────────────────────────────
@@ -229,7 +225,7 @@ network_config_path = "blockchain/network_config.json"
 
 # On-chain operator channel balance per side (KB).  Set high enough to cover
 # all satellite sub-channels across the experiment.  1 PB ≈ effectively unlimited.
-operator_channel_balance_kb = 1_000_000_000.0
+operator_channel_balance_kb = 1_000_000_000_000.0
 
 # Penalty reserve per operator per bilateral channel (KB).
 operator_channel_reserve_kb = 10_000_000.0

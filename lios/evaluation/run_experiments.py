@@ -119,6 +119,10 @@ def _compute_contact_traffic(cp, satellite_nodes) -> Dict[str, Dict]:
 #
 # Off-chain events (satellite peer-to-peer):
 #   OFFCHAIN_PROOF_UPDATE  — balance proof updated after each forwarding hop
+#   PROOF_PROP_SENT        — half-signed settlement proof sent to peer
+#   PROOF_PROP_COSIGNED    — peer verified and signed the proof
+#   PROOF_ACK_SENT         — peer returned the co-signed proof
+#   PROOF_ACK_RECEIVED     — initiator received the co-signed proof
 #   SETTLEMENT_QUEUED      — T1/T2/T7 triggers fired; payload queued for GS upload
 #
 # Ground settlement events (satellite→GS→Fabric):
@@ -127,20 +131,23 @@ def _compute_contact_traffic(cp, satellite_nodes) -> Dict[str, Dict]:
 #   CHALLENGE_EXPIRED      — challenge window closed; settlement finalised
 #   SETTLEMENT_FINALIZED   — Fabric confirmed finalization
 
-_OFFCHAIN_SAT_EVENTS = {"OFFCHAIN_PROOF_UPDATE", "SETTLEMENT_QUEUED", "ISL_RESUMED"}
+_OFFCHAIN_SAT_EVENTS = {
+    "OFFCHAIN_PROOF_UPDATE", "PROOF_PROP_SENT", "PROOF_PROP_COSIGNED",
+    "PROOF_ACK_SENT", "PROOF_ACK_RECEIVED", "SETTLEMENT_QUEUED", "ISL_RESUMED",
+}
 _GROUND_GS_EVENTS    = {"SETTLEMENT_RECEIVED", "CHALLENGE_SUBMITTED",
                         "CHALLENGE_EXPIRED", "SETTLEMENT_FINALIZED",
                         "PEER_SETTLEMENT_NOTIFIED"}
 
 
 def _compute_latency_summary(offchain: List[dict], ground: List[dict]) -> List[dict]:
-    """Build per-channel latency breakdown from logged events.
+    """Build one latency breakdown per settlement cycle.
 
     Two protocol latency components (orbital wait times are excluded as they
     depend on geometry, not the protocol):
 
-      offchain_latency_sec  — ISL propagation delay for the proof exchange
-                              (isl_prop_delay_sec at trigger time)
+      offchain_latency_sec  — complete proof-signing message exchange from
+                              proposal send through returned co-signed ACK
       onchain_latency_sec   — blockchain processing: SETTLEMENT_RECEIVED →
                               SETTLEMENT_FINALIZED (challenge window or immediate)
 
@@ -152,25 +159,43 @@ def _compute_latency_summary(offchain: List[dict], ground: List[dict]) -> List[d
     Ref: Bhattacherjee & Singla, "Network topology design at 27,000 km/hour,"
          ACM CoNEXT 2019, §3.1. https://doi.org/10.1145/3359989.3365407
     """
-    queued: Dict[str, dict] = {}
-    first_proof: Dict[str, float] = {}   # channel_id → t of first OFFCHAIN_PROOF_UPDATE
-    received: Dict[str, dict] = {}
-    finalized: Dict[str, float] = {}
-    resumed: Dict[str, List[dict]] = {}
+    # A channel can settle repeatedly.  The monotonically increasing balance-proof
+    # sequence number identifies a specific settlement cycle within that channel.
+    queued: Dict[tuple[str, Optional[int]], dict] = {}
+    proof_times: Dict[str, List[float]] = {}
+    proposal_sent: Dict[tuple[str, Optional[int]], float] = {}
+    peer_signed: Dict[tuple[str, Optional[int]], float] = {}
+    ack_sent: Dict[tuple[str, Optional[int]], float] = {}
+    ack_received: Dict[tuple[str, Optional[int]], float] = {}
+    received: Dict[tuple[str, Optional[int]], dict] = {}
+    finalized: Dict[tuple[str, Optional[int]], float] = {}
+    resumed: Dict[tuple[str, Optional[int]], List[dict]] = {}
 
     for e in offchain:
         ch_id = e.get("channel_id", "")
         if e["event"] == "OFFCHAIN_PROOF_UPDATE":
-            if ch_id not in first_proof:
-                first_proof[ch_id] = e.get("t", 0.0)
-        elif e["event"] == "SETTLEMENT_QUEUED" and ch_id not in queued:
-            queued[ch_id] = {
+            proof_times.setdefault(ch_id, []).append(e.get("t", 0.0))
+        elif e["event"] == "PROOF_PROP_SENT":
+            proposal_sent[(ch_id, e.get("seq_num"))] = e.get("t", 0.0)
+        elif e["event"] == "PROOF_PROP_COSIGNED":
+            peer_signed[(ch_id, e.get("seq_num"))] = e.get("t", 0.0)
+        elif e["event"] == "PROOF_ACK_SENT":
+            ack_sent[(ch_id, e.get("seq_num"))] = e.get("t", 0.0)
+        elif e["event"] == "PROOF_ACK_RECEIVED":
+            ack_received[(ch_id, e.get("seq_num"))] = e.get("t", 0.0)
+        elif e["event"] == "SETTLEMENT_QUEUED":
+            key = (ch_id, e.get("seq_num"))
+            if key in queued:
+                continue
+            queued[key] = {
                 "queued_at": e.get("t"),
                 "isl_range_km": e.get("isl_range_km"),
                 "isl_prop_delay_sec": e.get("isl_prop_delay_sec"),
+                "offchain_latency_sec": e.get("offchain_latency_sec"),
             }
         elif e["event"] == "ISL_RESUMED":
-            resumed.setdefault(ch_id, []).append({
+            key = (ch_id, e.get("seq_num"))
+            resumed.setdefault(key, []).append({
                 "satellite": e.get("satellite"),
                 "resumed_at": e.get("t"),
                 "gs_sent_at": e.get("gs_sent_at"),
@@ -179,6 +204,7 @@ def _compute_latency_summary(offchain: List[dict], ground: List[dict]) -> List[d
 
     for e in ground:
         ch_id = e.get("channel_id", "")
+        key = (ch_id, e.get("seq_num"))
         if e["event"] == "SETTLEMENT_RECEIVED":
             triggers = e.get("triggers") or []
             entry = {
@@ -192,24 +218,48 @@ def _compute_latency_summary(offchain: List[dict], ground: List[dict]) -> List[d
             # wait_for_gs.  The cooperative peer submission (triggers=[]) arrives
             # within milliseconds and would otherwise win the first-seen guard and
             # anchor all latency metrics to the wrong satellite.
-            if ch_id not in received or (triggers and not received[ch_id].get("_has_triggers")):
+            if key not in received or (triggers and not received[key].get("_has_triggers")):
                 entry["_has_triggers"] = bool(triggers)
-                received[ch_id] = entry
-        elif e["event"] == "SETTLEMENT_FINALIZED" and ch_id not in finalized:
-            finalized[ch_id] = e.get("t", 0.0)
+                received[key] = entry
+        elif e["event"] == "SETTLEMENT_FINALIZED" and key not in finalized:
+            finalized[key] = e.get("t", 0.0)
 
     summary = []
-    for ch_id, q in queued.items():
-        rec = received.get(ch_id, {})
-        res_list = resumed.get(ch_id, [])
+    previous_queued_at: Dict[str, float] = {}
+    for (ch_id, seq_num), q in sorted(
+        queued.items(), key=lambda item: item[1].get("queued_at") or 0.0
+    ):
+        key = (ch_id, seq_num)
+        rec = received.get(key, {})
+        res_list = resumed.get(key, [])
 
         isl_prop       = q.get("isl_prop_delay_sec") or 0.0
+        proposal_at    = proposal_sent.get(key)
+        signed_at      = peer_signed.get(key)
+        ack_sent_at    = ack_sent.get(key)
+        ack_received_at = ack_received.get(key)
+        offchain_sec   = (
+            round(ack_received_at - proposal_at, 6)
+            if proposal_at is not None and ack_received_at is not None
+            else q.get("offchain_latency_sec")
+        )
+        if offchain_sec is None:
+            # Compatibility for logs generated before complete exchange timing
+            # was recorded. A proposal and returned ACK use two propagation legs.
+            offchain_sec = 2.0 * isl_prop
         uplink_prop    = rec.get("uplink_prop_delay_sec") or 0.0
         wait_for_gs    = rec.get("wait_for_gs_sec") or 0.0
         gs_received_at = rec.get("gs_received_at")
-        finalized_at   = finalized.get(ch_id)
-        first_t        = first_proof.get(ch_id)
+        finalized_at   = finalized.get(key)
         queued_at      = q.get("queued_at")
+        previous_t     = previous_queued_at.get(ch_id, float("-inf"))
+        cycle_proofs   = [
+            proof_t for proof_t in proof_times.get(ch_id, [])
+            if previous_t < proof_t <= queued_at
+        ] if queued_at is not None else []
+        first_t        = min(cycle_proofs) if cycle_proofs else None
+        if queued_at is not None:
+            previous_queued_at[ch_id] = queued_at
 
         blockchain_sec = (
             round(finalized_at - gs_received_at, 6)
@@ -221,7 +271,11 @@ def _compute_latency_summary(offchain: List[dict], ground: List[dict]) -> List[d
             if queued_at is not None and first_t is not None
             else None
         )
-        protocol_latency_sec = round(isl_prop + uplink_prop + (blockchain_sec or 0.0), 6)
+        protocol_latency_sec = (
+            round(offchain_sec + uplink_prop + blockchain_sec, 6)
+            if blockchain_sec is not None
+            else None
+        )
 
         isl_resume_breakdown = []
         for r in res_list:
@@ -240,10 +294,17 @@ def _compute_latency_summary(offchain: List[dict], ground: List[dict]) -> List[d
 
         summary.append({
             "channel_id": ch_id,
+            "seq_num": seq_num,
+            "settlement_id": f"{ch_id}:{seq_num}",
             "queued_at":  queued_at,
             "offchain": {
                 "contact_duration_sec": contact_duration_sec,
                 "isl_prop_delay_sec":   round(isl_prop, 6),
+                "proof_exchange_sec":   round(offchain_sec, 6),
+                "proposal_sent_at":     proposal_at,
+                "peer_signed_at":       signed_at,
+                "ack_sent_at":          ack_sent_at,
+                "ack_received_at":      ack_received_at,
             },
             "ground": {
                 "wait_for_gs_sec":       wait_for_gs,
@@ -254,7 +315,7 @@ def _compute_latency_summary(offchain: List[dict], ground: List[dict]) -> List[d
             "isl_resume": isl_resume_breakdown,
             "protocol_latency_sec": protocol_latency_sec,
         })
-    return sorted(summary, key=lambda x: (x.get("queued_at") or 0))
+    return summary
 
 
 def _stats_for(values: List[float]) -> dict:
@@ -272,15 +333,57 @@ def _stats_for(values: List[float]) -> dict:
     }
 
 
-def _compute_latency_stats(latency_summary: List[dict]) -> dict:
+def _compute_offchain_proof_exchanges(offchain: List[dict]) -> List[dict]:
+    """Pair proposal/ACK events into complete signed balance-proof exchanges."""
+    events_by_key: Dict[tuple[str, Optional[int]], dict] = {}
+    event_fields = {
+        "PROOF_PROP_SENT": "proposal_sent_at",
+        "PROOF_PROP_COSIGNED": "peer_signed_at",
+        "PROOF_ACK_SENT": "ack_sent_at",
+        "PROOF_ACK_RECEIVED": "ack_received_at",
+    }
+    for event in offchain:
+        field = event_fields.get(event.get("event"))
+        if field is None:
+            continue
+        key = (event.get("channel_id", ""), event.get("seq_num"))
+        record = events_by_key.setdefault(key, {
+            "channel_id": key[0],
+            "seq_num": key[1],
+            "exchange_id": f"{key[0]}:{key[1]}",
+        })
+        record[field] = event.get("t")
+        record["exchange_type"] = event.get(
+            "exchange_type", record.get("exchange_type", "settlement")
+        )
+
+    exchanges = []
+    for record in events_by_key.values():
+        sent_at = record.get("proposal_sent_at")
+        received_at = record.get("ack_received_at")
+        if sent_at is None or received_at is None:
+            continue
+        record["latency_sec"] = round(received_at - sent_at, 6)
+        exchanges.append(record)
+    return sorted(exchanges, key=lambda item: item["proposal_sent_at"])
+
+
+def _compute_latency_stats(
+    latency_summary: List[dict],
+    offchain_exchanges: Optional[List[dict]] = None,
+) -> dict:
     """Compute separate offchain and onchain latency statistics.
 
-    Offchain: ISL proof-exchange propagation delay (isl_prop_delay_sec).
+    Offchain: complete proposal → peer co-sign → returned ACK duration.
     Onchain:  SETTLEMENT_RECEIVED → SETTLEMENT_FINALIZED (blockchain processing).
     Protocol: combined protocol latency excluding all orbital waits.
     """
-    offchain_vals  = [s["offchain"]["isl_prop_delay_sec"] for s in latency_summary
-                      if s.get("offchain", {}).get("isl_prop_delay_sec") is not None]
+    offchain_vals = (
+        [e["latency_sec"] for e in offchain_exchanges]
+        if offchain_exchanges is not None
+        else [s["offchain"]["proof_exchange_sec"] for s in latency_summary
+              if s.get("offchain", {}).get("proof_exchange_sec") is not None]
+    )
     onchain_vals   = [s["ground"]["blockchain_sec"] for s in latency_summary
                       if s.get("ground", {}).get("blockchain_sec") is not None]
     protocol_vals  = [s["protocol_latency_sec"] for s in latency_summary
@@ -322,11 +425,13 @@ def _write_settlement_log(
     ground.sort(key=lambda e: e.get("t", 0))
 
     latency_summary = _compute_latency_summary(offchain, ground)
-    latency_stats = _compute_latency_stats(latency_summary)
+    offchain_exchanges = _compute_offchain_proof_exchanges(offchain)
+    latency_stats = _compute_latency_stats(latency_summary, offchain_exchanges)
 
     log = {
         "experiment": experiment_name,
         "offchain": offchain,
+        "offchain_proof_exchanges": offchain_exchanges,
         "ground_settlement": ground,
         "latency_summary": latency_summary,
     }
@@ -811,7 +916,7 @@ def generate_paper_figures(results: List[ExperimentResult], out_dir: Path) -> No
         x = np.arange(len(lat_names))
         width = 0.25
         fig, ax = plt.subplots(figsize=(max(8, len(lat_names) * 1.6), 5))
-        ax.bar(x - width,     lat_offchain, width, label="Off-chain ISL propagation",    color="steelblue", alpha=0.85)
+        ax.bar(x - width,     lat_offchain, width, label="Off-chain proof-signing exchange", color="steelblue", alpha=0.85)
         ax.bar(x,             lat_onchain,  width, label="On-chain blockchain processing", color="coral",    alpha=0.85)
         ax.bar(x + width,     lat_protocol, width, label="Protocol total (excl. orbital waits)", color="mediumseagreen", alpha=0.85)
         ax.set_xticks(x)
