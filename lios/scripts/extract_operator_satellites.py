@@ -8,14 +8,15 @@ patterns for known constellations and fleet names.
 Usage:
   python3 lios/scripts/extract_operator_satellites.py
   python3 lios/scripts/extract_operator_satellites.py \
-      --active-csv lios/data-l/tles/active.csv \
-      --out-dir lios/data-l/tles
+      --active-csv lios/data/tles/active.csv \
+      --out-dir lios/data/tles
 """
 from __future__ import annotations
 
 import argparse
 import csv
 import json
+import math
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -23,8 +24,11 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_ACTIVE_CSV = REPO_ROOT / "lios/data-l/active.csv"
-DEFAULT_OUT_DIR = REPO_ROOT / "lios/data-l/tles"
+DEFAULT_ACTIVE_CSV = REPO_ROOT / "lios/data/active.csv"
+DEFAULT_OUT_DIR = REPO_ROOT / "lios/data/tles"
+DEFAULT_MAX_APOGEE_KM = 2000.0
+EARTH_EQUATORIAL_RADIUS_KM = 6378.137
+EARTH_GRAVITATIONAL_PARAMETER_KM3_S2 = 398600.4418
 
 
 @dataclass(frozen=True)
@@ -113,6 +117,29 @@ def match_rows(rows: list[dict[str, str]], operator: OperatorPattern) -> list[di
         for row in rows
         if any(regex.search(row["OBJECT_NAME"]) for regex in regexes)
     ]
+
+
+def apogee_altitude_km(row: dict[str, str]) -> float:
+    """Calculate osculating apogee altitude from catalog mean motion and eccentricity."""
+    mean_motion_rev_day = float(row["MEAN_MOTION"])
+    eccentricity = float(row["ECCENTRICITY"])
+    if mean_motion_rev_day <= 0.0 or not 0.0 <= eccentricity < 1.0:
+        raise ValueError(
+            f"invalid orbit for {row.get('OBJECT_NAME', '<unknown>')!r}: "
+            f"mean_motion={mean_motion_rev_day}, eccentricity={eccentricity}"
+        )
+    mean_motion_rad_sec = mean_motion_rev_day * 2.0 * math.pi / 86400.0
+    semi_major_axis_km = (
+        EARTH_GRAVITATIONAL_PARAMETER_KM3_S2 / mean_motion_rad_sec**2
+    ) ** (1.0 / 3.0)
+    return semi_major_axis_km * (1.0 + eccentricity) - EARTH_EQUATORIAL_RADIUS_KM
+
+
+def filter_leo_rows(
+    rows: list[dict[str, str]], max_apogee_km: float
+) -> list[dict[str, str]]:
+    """Keep satellites whose complete orbit remains within the LEO boundary."""
+    return [row for row in rows if apogee_altitude_km(row) <= max_apogee_km]
 
 
 def tle_checksum(line: str) -> str:
@@ -244,6 +271,15 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_OUT_DIR,
         help=f"Output directory for per-operator TLEs (default: {DEFAULT_OUT_DIR})",
     )
+    parser.add_argument(
+        "--max-apogee-km",
+        type=float,
+        default=DEFAULT_MAX_APOGEE_KM,
+        help=(
+            "Keep only satellites at or below this apogee altitude in km "
+            f"(default: {DEFAULT_MAX_APOGEE_KM:.0f}, the LEO boundary)"
+        ),
+    )
     return parser.parse_args()
 
 
@@ -264,10 +300,15 @@ def main() -> None:
             if not csv_path.exists():
                 continue
             rows = load_operator_csv(csv_path)
+            matched_count = len(rows)
+            rows = filter_leo_rows(rows, args.max_apogee_km)
             tle_path = args.out_dir / operator.filename
             write_tle(tle_path, rows)
             converted += 1
-            print(f"{operator.display_name:<45} {len(rows):>6} -> {tle_path.name}")
+            print(
+                f"{operator.display_name:<45} {len(rows):>6} LEO "
+                f"({matched_count - len(rows):>4} excluded) -> {tle_path.name}"
+            )
         if converted == 0:
             raise SystemExit(
                 f"No existing operator CSV files found in {source_dir}; "
@@ -279,8 +320,11 @@ def main() -> None:
     summary = []
 
     print(f"Loaded {len(rows):,} active catalog rows from {args.active_csv}")
+    print(f"Keeping satellites with apogee <= {args.max_apogee_km:g} km")
     for operator in OPERATORS:
         matches = match_rows(rows, operator)
+        matched_count = len(matches)
+        matches = filter_leo_rows(matches, args.max_apogee_km)
         tle_path = args.out_dir / operator.filename
         write_tle(tle_path, matches)
         examples = [row["OBJECT_NAME"] for row in matches[:5]]
@@ -294,7 +338,10 @@ def main() -> None:
                 "notes": operator.notes,
             }
         )
-        print(f"{operator.display_name:<45} {len(matches):>6} -> {tle_path.name}")
+        print(
+            f"{operator.display_name:<45} {len(matches):>6} LEO "
+            f"({matched_count - len(matches):>4} excluded) -> {tle_path.name}"
+        )
 
 
 

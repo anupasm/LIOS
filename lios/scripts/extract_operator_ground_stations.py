@@ -10,8 +10,8 @@ write ``gss/<operator>.txt`` files compatible with ``contact_plan.GSLoader``:
 Usage:
   python3 lios/scripts/extract_operator_ground_stations.py
   python3 lios/scripts/extract_operator_ground_stations.py \
-      --ground-station-csv lios/data-l/ground_station.csv \
-      --out-dir lios/data-l/gss
+      --ground-station-csv lios/data/ground_station.csv \
+      --out-dir lios/data/gss
 """
 from __future__ import annotations
 
@@ -23,8 +23,8 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_GS_CSV = REPO_ROOT / "lios/data-l/ground_station.csv"
-DEFAULT_OUT_DIR = REPO_ROOT / "lios/data-l/gss"
+DEFAULT_GS_CSV = REPO_ROOT / "lios/data/ground_station.csv"
+DEFAULT_OUT_DIR = REPO_ROOT / "lios/data/gss"
 DEFAULT_ALT_M = 0.0
 DEFAULT_MIN_ELEVATION_DEG = 5.0
 
