@@ -24,7 +24,7 @@ CONFIG="${1:-all}"
 
 CONTACT_PLAN="cp_24h_step30_range4000.csv"
 CONTACT_META="cp_24h_step30_range4000_meta.json"
-TRAFFIC_SCHEDULE="tf_pair_v2_e20260614T000000_d0.500_w863a161b79_24h_s42_r0.300000_step30_range4000.json"
+TRAFFIC_PATTERN="tf_pair_v2_e20260614T000000_d0.500_w*_24h_s42_r0.300000_step30_range4000.json"
 
 case "$CONFIG" in
     all|lios_constellation_weighted|ground_reset_constellation_weighted)
@@ -36,13 +36,32 @@ case "$CONFIG" in
         ;;
 esac
 
-for artifact in "$CONTACT_PLAN" "$CONTACT_META" "$TRAFFIC_SCHEDULE"; do
+for artifact in "$CONTACT_PLAN" "$CONTACT_META"; do
     if [[ ! -s "$CACHE_DIR/$artifact" ]]; then
         echo "Required precompute artifact is missing or empty: $CACHE_DIR/$artifact" >&2
         echo "Run: sbatch run_precompute.slurm" >&2
         exit 1
     fi
 done
+
+# The weight hash is derived from the constellation sizes and therefore changes
+# when the TLE dataset changes. The experiment runner computes the exact hash
+# and validates the corresponding schedule before loading it.
+shopt -s nullglob
+traffic_schedules=("$CACHE_DIR"/$TRAFFIC_PATTERN)
+shopt -u nullglob
+traffic_schedule_found=false
+for artifact in "${traffic_schedules[@]}"; do
+    if [[ -s "$artifact" ]]; then
+        traffic_schedule_found=true
+        break
+    fi
+done
+if [[ "$traffic_schedule_found" != true ]]; then
+    echo "Required precompute traffic artifact is missing or empty: $CACHE_DIR/$TRAFFIC_PATTERN" >&2
+    echo "Run: sbatch run_precompute.slurm" >&2
+    exit 1
+fi
 
 mkdir -p "$REPO_DIR/logs"
 mkdir -p "$RESULTS_DIR"
