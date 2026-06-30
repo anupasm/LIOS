@@ -78,14 +78,14 @@ EXPERIMENT_CONFIGS: List[ExperimentConfig] = [
     ExperimentConfig(
         "lios_constellation_weighted",
         duration_sec=86_400,
-        traffic_arrival_rate=0.3,
+        traffic_arrival_rate=50.0,
         adversarial_mode="none",
         random_seed=42,
     ),
     ExperimentConfig(
         "ground_reset_constellation_weighted",
         duration_sec=86_400,
-        traffic_arrival_rate=0.3,
+        traffic_arrival_rate=50.0,
         adversarial_mode="none",
         random_seed=42,
         baseline_protocol="ground_reset",
@@ -779,10 +779,10 @@ def run_experiment(
 
     # ── Extract per-operator payments from finalized settlements ─────────────
     # channel_id = "<sat_a>__<sat_b>" (sorted); balance_a belongs to sat_a's operator.
-    # initial per-side = channel_balance_kb / 2; positive delta_a → op_a received net payment.
+    # Initial per-side balance is channel_balance_kb; positive delta_a means op_a received net payment.
     from simulator.ground_station_node import FabricMock as _FabricMock
     if isinstance(fabric, _FabricMock):
-        initial_half_kb = lios_cfg.protocol.channel_balance_kb / 2.0
+        initial_half_kb = float(lios_cfg.protocol.channel_balance_kb)
         for ch_id, rec in fabric._settlements.items():
             if rec.get("status") not in ("FINALIZED", "RESET", "MUTUAL_FINALIZED"):
                 continue

@@ -17,7 +17,7 @@ Usage::
     from config import cfg
 
     cfg.link.isl_max_kbps           # 10_000.0
-    cfg.simulation.arrival_rate     # 0.6 global flows/second
+    cfg.simulation.arrival_rate     # 50 global flows/second
     cfg.crypto.cert_valid_days      # 90
 """
 from __future__ import annotations
@@ -50,7 +50,7 @@ class ProtocolConfig:
 
     s_max_kb: int
     """T7 trigger threshold: cumulative bytes forwarded in one session (KB).
-    The production default is 100 GB, limiting unsettled session exposure."""
+    The evaluation default is 1 GB, limiting unsettled session exposure."""
 
     t_challenge_sec: float
     """On-chain challenge window after initiateSettlement() (seconds).
@@ -64,7 +64,7 @@ class ProtocolConfig:
     channel_balance_kb: int
     """Initial channel balance allocated to each side at open time (KB).
     Total channel capacity = 2 × this value.
-    Default: 1 TB per side (1,000,000,000 KB in decimal units).
+    Evaluation default: 5 GB per side (5,000,000 KB in decimal units).
     flow_size_max_kb must be ≤ this value to avoid guaranteed flow drops."""
 
     timestamp_tolerance_sec: float

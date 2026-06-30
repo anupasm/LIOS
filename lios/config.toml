@@ -15,13 +15,13 @@
 [protocol]
 
 # T1 trigger: balance below this fraction of total channel capacity.
-# With 1 TB per side, this fires when either side falls below 100 GB.
-t_low_fraction = 0.05          # 5 % of the 2 TB channel pool
+# With 5 GB per side, this fires when either side falls below 500 MB.
+t_low_fraction = 0.05          # 5 % of the 10 GB channel pool
 
 # T7 trigger: cumulative bytes forwarded in one session (KB).
-# 100 GB limits unsettled exposure while remaining well below the 900 GB that
+# 1 GB limits unsettled exposure while remaining well below the 4.5 GB that
 # one side can spend before T1 (B - 2B*f, where B is the per-side balance).
-s_max_kb = 100_000_000
+s_max_kb = 1_000_000
 
 # On-chain challenge window after initiateSettlement() (seconds).
 # 48 h allows the peer to observe and challenge through intermittent GS access.
@@ -31,8 +31,8 @@ t_challenge_sec = 172_800.0
 t_topup_confirm_sec = 86_400.0
 
 # Initial channel balance per side (KB).
-# Decimal units: 1 TB = 1,000,000,000 KB.
-channel_balance_kb = 1_000_000_000
+# Decimal units: 5 GB = 5,000,000 KB.
+channel_balance_kb = 5_000_000
 
 # Auth handshake: maximum clock skew between satellites (seconds)
 timestamp_tolerance_sec = 30.0
@@ -180,7 +180,7 @@ time_step_sec = 30
 # Global Poisson traffic arrival rate (flows per second).
 # This does not scale with the number of ground nodes, satellites, or active
 # ISL pairs, keeping offered load comparable across constellation sizes.
-arrival_rate = 0.6
+arrival_rate = 50.0
 
 # Allocate each arrival uniformly across cross-operator satellite pairs that
 # have an active ISL at the arrival time.
@@ -205,7 +205,7 @@ p_attack = 0.5
 # Lower clamp: minimum flow size.  1,024 KB is approximately 1 MB.
 flow_size_min_kb = 1024
 # Upper clamp: must be ≤ channel_balance_kb or flows will always be dropped.
-# Individual flows remain bounded at about 10 MB; channel capacity is 1 TB.
+# Individual flows remain bounded at about 10 MB; per-side balance is 5 GB.
 flow_size_max_kb = 10_240
 
 # ── Cryptographic PKI ──────────────────────────────────────────────────────────

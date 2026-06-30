@@ -27,7 +27,7 @@ from protocol.offchain import BalanceProof, OffChainProtocol, SettlementPayload
 from simulator.simulator import EventType, SimEvent
 
 
-CHANNEL_BALANCE_KB = cfg.protocol.channel_balance_kb  # 1 TB per side; see config.toml
+CHANNEL_BALANCE_KB = cfg.protocol.channel_balance_kb  # 5 GB per side; see config.toml
 
 
 @dataclass
